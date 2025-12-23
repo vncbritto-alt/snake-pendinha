@@ -34,8 +34,25 @@ canvas {
   left: 10px;
   color: white;
   font-size: 16px;
+  z-index: 10;
 }
 
+/* Fullscreen */
+#fullscreenBtn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 10;
+  background: rgba(0,0,0,0.6);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 18px;
+}
+
+/* MENU */
 #menu {
   position: absolute;
   inset: 0;
@@ -45,12 +62,13 @@ canvas {
   justify-content: center;
   color: white;
   background: rgba(0,0,0,0.6);
+  z-index: 20;
 }
 
 .colorPicker {
   display: flex;
   gap: 8px;
-  margin: 10px 0;
+  margin: 12px 0;
 }
 
 .color {
@@ -60,12 +78,29 @@ canvas {
   cursor: pointer;
   border: 2px solid #fff;
 }
+
+.color.selected {
+  outline: 3px solid #00e676;
+}
+
+#startBtn {
+  margin-top: 16px;
+  padding: 10px 20px;
+  font-size: 16px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: #00e676;
+  color: #000;
+}
 </style>
 </head>
 
 <body>
 
 <div id="gameContainer">
+  <button id="fullscreenBtn">⛶</button>
+
   <canvas id="game" width="360" height="520"></canvas>
 
   <div id="ui">
@@ -78,14 +113,12 @@ canvas {
 
     <div class="colorPicker" id="colors"></div>
 
-    <p>(Clique para começar)</p>
+    <button id="startBtn">▶ Iniciar Jogo</button>
   </div>
 </div>
 
 <script>
-/* ============================================================
-   ====================== CONFIGURAÇÕES =======================
-   ============================================================ */
+/* ====================== CONFIG ====================== */
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -116,9 +149,17 @@ let score = 0;
 let running = false;
 let bgOffset = 0;
 
-/* ============================================================
-   ====================== MENU CORES ==========================
-   ============================================================ */
+/* ====================== FULLSCREEN ====================== */
+
+document.getElementById("fullscreenBtn").onclick = () => {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen();
+  } else {
+    document.exitFullscreen();
+  }
+};
+
+/* ====================== MENU CORES ====================== */
 
 const colorsDiv = document.getElementById("colors");
 
@@ -126,13 +167,25 @@ COLORS.forEach(color => {
   const div = document.createElement("div");
   div.className = "color";
   div.style.background = color;
-  div.onclick = () => selectedColor = color;
+
+  if (color === selectedColor) div.classList.add("selected");
+
+  div.onclick = () => {
+    selectedColor = color;
+    document.querySelectorAll(".color").forEach(c => c.classList.remove("selected"));
+    div.classList.add("selected");
+  };
+
   colorsDiv.appendChild(div);
 });
 
-/* ============================================================
-   ====================== INPUT ===============================
-   ============================================================ */
+/* ====================== START ====================== */
+
+document.getElementById("startBtn").onclick = () => {
+  startGame();
+};
+
+/* ====================== INPUT ====================== */
 
 canvas.addEventListener("mousemove", e => {
   if (!running) return;
@@ -144,30 +197,23 @@ canvas.addEventListener("mousemove", e => {
   snake.angle = Math.atan2(my - snake.y, mx - snake.x);
 });
 
-canvas.addEventListener("click", () => {
-  if (!running) {
-    startGame();
-  }
-});
-
-/* ============================================================
-   ====================== INICIAR =============================
-   ============================================================ */
+/* ====================== GAME START ====================== */
 
 function startGame() {
   document.getElementById("menu").style.display = "none";
+
   snake.body = [];
   snake.x = W / 2;
   snake.y = H / 2;
   snake.length = 12;
   score = 0;
+  document.getElementById("score").textContent = score;
+
   spawnFood();
   running = true;
 }
 
-/* ============================================================
-   ====================== COMIDA ==============================
-   ============================================================ */
+/* ====================== FOOD ====================== */
 
 function spawnFood() {
   food = {
@@ -178,43 +224,29 @@ function spawnFood() {
   };
 }
 
-/* ============================================================
-   ====================== UPDATE ==============================
-   ============================================================ */
+/* ====================== UPDATE ====================== */
 
 function update() {
   if (!running) return;
 
-  // Fundo animado
   bgOffset += 0.3;
 
-  // Cobra
   snake.x += Math.cos(snake.angle) * snake.speed;
   snake.y += Math.sin(snake.angle) * snake.speed;
 
-  // Corpo
   snake.body.unshift({ x: snake.x, y: snake.y });
-  if (snake.body.length > snake.length) {
-    snake.body.pop();
-  }
+  if (snake.body.length > snake.length) snake.body.pop();
 
-  // Olhos piscando
-  snake.eyeBlink += 1;
-  if (snake.eyeBlink > 200) snake.eyeBlink = 0;
-
-  // Língua
+  snake.eyeBlink = (snake.eyeBlink + 1) % 220;
   snake.tongue += 0.15;
 
-  // Comida foge
   food.angle += (Math.random() - 0.5) * 0.2;
   food.x += Math.cos(food.angle) * food.speed;
   food.y += Math.sin(food.angle) * food.speed;
 
-  // Limites
   food.x = Math.max(20, Math.min(W - 20, food.x));
   food.y = Math.max(20, Math.min(H - 20, food.y));
 
-  // Colisão
   const dx = snake.x - food.x;
   const dy = snake.y - food.y;
   if (Math.hypot(dx, dy) < 16) {
@@ -225,9 +257,7 @@ function update() {
   }
 }
 
-/* ============================================================
-   ====================== DESENHO =============================
-   ============================================================ */
+/* ====================== DRAW ====================== */
 
 function drawBackground() {
   ctx.fillStyle = "#102e1c";
@@ -236,13 +266,7 @@ function drawBackground() {
   ctx.fillStyle = "rgba(255,255,255,0.05)";
   for (let i = 0; i < 20; i++) {
     ctx.beginPath();
-    ctx.arc(
-      (i * 40 + bgOffset) % W,
-      (i * 30) % H,
-      20,
-      0,
-      Math.PI * 2
-    );
+    ctx.arc((i * 40 + bgOffset) % W, (i * 30) % H, 20, 0, Math.PI * 2);
     ctx.fill();
   }
 }
@@ -256,12 +280,10 @@ function drawSnake() {
     ctx.fill();
   });
 
-  // Cabeça
   ctx.beginPath();
   ctx.arc(snake.x, snake.y, 10, 0, Math.PI * 2);
   ctx.fill();
 
-  // Olhos
   if (snake.eyeBlink < 180) {
     ctx.fillStyle = "#000";
     ctx.beginPath();
@@ -278,7 +300,6 @@ function drawSnake() {
     ctx.fill();
   }
 
-  // Língua
   ctx.strokeStyle = "#ff1744";
   ctx.beginPath();
   ctx.moveTo(snake.x, snake.y);
@@ -296,9 +317,7 @@ function drawFood() {
   ctx.fill();
 }
 
-/* ============================================================
-   ====================== LOOP ================================
-   ============================================================ */
+/* ====================== LOOP ====================== */
 
 function loop() {
   update();
