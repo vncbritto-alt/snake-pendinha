@@ -27,7 +27,6 @@ canvas {
   display: block;
 }
 
-/* UI */
 #ui {
   position: absolute;
   top: 10px;
@@ -37,7 +36,6 @@ canvas {
   z-index: 10;
 }
 
-/* Fullscreen */
 #fullscreenBtn {
   position: absolute;
   top: 10px;
@@ -52,7 +50,6 @@ canvas {
   font-size: 18px;
 }
 
-/* MENU */
 #menu {
   position: absolute;
   inset: 0;
@@ -117,7 +114,7 @@ canvas {
 
 <script>
 /* ============================================================
-   ====================== CONFIGURAÇÃO ========================
+   ====================== CONFIG GERAL ========================
    ============================================================ */
 
 const canvas = document.getElementById("game");
@@ -142,7 +139,7 @@ let bgOffset = 0;
 let attackCooldown = 0;
 
 /* ============================================================
-   ====================== PLAYER SNAKE ========================
+   ====================== PLAYER ==============================
    ============================================================ */
 
 const snake = {
@@ -157,7 +154,7 @@ const snake = {
 };
 
 /* ============================================================
-   ====================== OBJETOS DE JOGO =====================
+   ====================== OBJETOS =============================
    ============================================================ */
 
 let food = {};
@@ -172,11 +169,8 @@ let bossShots = [];
    ============================================================ */
 
 document.getElementById("fullscreenBtn").onclick = () => {
-  if (!document.fullscreenElement) {
-    document.documentElement.requestFullscreen();
-  } else {
-    document.exitFullscreen();
-  }
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
 };
 
 /* ============================================================
@@ -219,10 +213,15 @@ canvas.addEventListener("mousemove", e => {
 
 canvas.addEventListener("mousedown", () => {
   if (!running) return;
-
   if (attackCooldown <= 0) {
     attackCooldown = 25;
-    shootPlayer();
+    playerShots.push({
+      x: snake.x,
+      y: snake.y,
+      angle: snake.angle,
+      speed: 6,
+      radius: 4
+    });
   }
 });
 
@@ -257,7 +256,7 @@ function resetSnake() {
 }
 
 /* ============================================================
-   ====================== SPAWN ===============================
+   ====================== SPAWNS ==============================
    ============================================================ */
 
 function spawnFood() {
@@ -311,35 +310,8 @@ function gameOver() {
   running = false;
   document.getElementById("menu").style.display = "flex";
 }
-
 /* ============================================================
-   ====================== ATAQUE PLAYER =======================
-   ============================================================ */
-
-function shootPlayer() {
-  playerShots.push({
-    x: snake.x,
-    y: snake.y,
-    angle: snake.angle,
-    speed: 6,
-    radius: 4
-  });
-}
-
-/* ============================================================
-   ====================== LOOP BASE ===========================
-   ============================================================ */
-
-function loop() {
-  update();
-  draw();
-  requestAnimationFrame(loop);
-}
-
-loop();
-<script>
-/* ============================================================
-   ====================== UPDATE PRINCIPAL ===================
+   ====================== LOOP PRINCIPAL ======================
    ============================================================ */
 
 let bossShootTimer = 0;
@@ -354,7 +326,6 @@ function update() {
   snake.x += Math.cos(snake.angle) * snake.speed;
   snake.y += Math.sin(snake.angle) * snake.speed;
 
-  // Limites da tela
   snake.x = Math.max(10, Math.min(W - 10, snake.x));
   snake.y = Math.max(10, Math.min(H - 10, snake.y));
 
@@ -383,7 +354,7 @@ function update() {
     }
   }
 
-  /* ================= COBRINHAS PEQUENAS ================= */
+  /* ================= COBRINHAS ================= */
   enemySnakes.forEach((e, i) => {
     const dist = Math.hypot(snake.x - e.x, snake.y - e.y);
 
@@ -399,14 +370,14 @@ function update() {
     e.body.unshift({ x: e.x, y: e.y });
     if (e.body.length > e.length) e.body.pop();
 
-    if (Math.hypot(snake.x - e.x, snake.y - e.y) < 14) {
+    if (dist < 14) {
       score += e.size;
       enemySnakes.splice(i, 1);
       updateUI();
     }
   });
 
-  /* ================= TIROS DO PLAYER ================= */
+  /* ================= TIROS PLAYER ================= */
   playerShots.forEach((s, i) => {
     s.x += Math.cos(s.angle) * s.speed;
     s.y += Math.sin(s.angle) * s.speed;
@@ -430,16 +401,14 @@ function update() {
           gameOver();
           return;
         }
-
         spawnBoss();
       }
     }
   });
 
-  /* ================= BOSS ================= */
   updateBoss();
 
-  /* ================= TIROS DO BOSS ================= */
+  /* ================= TIROS BOSS ================= */
   bossShots.forEach((b, i) => {
     b.x += Math.cos(b.angle) * b.speed;
     b.y += Math.sin(b.angle) * b.speed;
@@ -455,7 +424,7 @@ function update() {
 }
 
 /* ============================================================
-   ====================== BOSS IA ============================
+   ====================== BOSS IA =============================
    ============================================================ */
 
 function updateBoss() {
@@ -531,16 +500,10 @@ function drawSnake() {
   if (snake.eyeBlink < 180) {
     ctx.fillStyle = "#000";
     ctx.beginPath();
-    ctx.arc(
-      snake.x + Math.cos(snake.angle + 0.5) * 5,
-      snake.y + Math.sin(snake.angle + 0.5) * 5,
-      2, 0, Math.PI * 2
-    );
-    ctx.arc(
-      snake.x + Math.cos(snake.angle - 0.5) * 5,
-      snake.y + Math.sin(snake.angle - 0.5) * 5,
-      2, 0, Math.PI * 2
-    );
+    ctx.arc(snake.x + Math.cos(snake.angle + 0.5) * 5,
+            snake.y + Math.sin(snake.angle + 0.5) * 5, 2, 0, Math.PI * 2);
+    ctx.arc(snake.x + Math.cos(snake.angle - 0.5) * 5,
+            snake.y + Math.sin(snake.angle - 0.5) * 5, 2, 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -610,4 +573,19 @@ function drawBossShots() {
     ctx.fill();
   });
 }
+
+/* ============================================================
+   ====================== GAME LOOP ===========================
+   ============================================================ */
+
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+
 </script>
+</body>
+</html>
