@@ -26,7 +26,7 @@ html, body {
 canvas {
   width: 100%;
   display: block;
-  background: #000;
+  background: radial-gradient(#111, #000);
 }
 
 #ui {
@@ -74,7 +74,7 @@ canvas {
 </div>
 
 <script>
-/* ========================= SETUP ========================= */
+/* ========================= BASE ========================= */
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -104,35 +104,51 @@ canvas.addEventListener("mouseup",()=>input.down=false);
 const player = {
   x: W/2,
   y: H-60,
-  size: 18,
+  size: 16,
   cooldown: 0,
   bullets: []
 };
 
 function shootPlayer(){
-  player.bullets.push({ x:player.x, y:player.y-10, speed:7, r:3 });
+  player.bullets.push({
+    x: player.x,
+    y: player.y - 12,
+    vy: -7,
+    r: 3
+  });
 }
 
-/* ========================= ENEMIES ========================= */
+/* ========================= BOSS (NAVE-MÃE) ========================= */
 
-const enemies = [];
+const boss = {
+  x: W/2,
+  y: 90,
+  radius: 32,
+  life: 200,
+  maxLife: 200,
+  shootTimer: 0,
+  bullets: []
+};
 
-function spawnEnemy(){
-  enemies.push({
-    x: Math.random()*(W-40)+20,
-    y: -30,
-    size: 14,
-    life: 1,
-    vy: 2
-  });
+function bossShoot(){
+  for(let i=-2;i<=2;i++){
+    boss.bullets.push({
+      x: boss.x,
+      y: boss.y,
+      angle: Math.PI/2 + i*0.25,
+      speed: 2.2,
+      r: 5
+    });
+  }
 }
 
 /* ========================= UPDATE ========================= */
 
 function update(){
+
   if(gameState !== STATE.PLAYING) return;
 
-  // player
+  /* PLAYER */
   player.x += (input.x - player.x) * 0.15;
   player.y += (input.y - player.y) * 0.15;
   player.cooldown--;
@@ -142,32 +158,33 @@ function update(){
     player.cooldown = 12;
   }
 
-  // bullets
-  for(let i=player.bullets.length-1;i>=0;i--){
-    const b = player.bullets[i];
-    b.y -= b.speed;
-    if(b.y < -10) player.bullets.splice(i,1);
+  player.bullets.forEach(b => b.y += b.vy);
+  player.bullets = player.bullets.filter(b => b.y > -20);
+
+  /* BOSS */
+  boss.shootTimer++;
+  if(boss.shootTimer > 60){
+    boss.shootTimer = 0;
+    bossShoot();
   }
 
-  // enemies
-  if(Math.random()<0.03) spawnEnemy();
+  boss.bullets.forEach(b=>{
+    b.x += Math.cos(b.angle)*b.speed;
+    b.y += Math.sin(b.angle)*b.speed;
+  });
 
-  for(let i=enemies.length-1;i>=0;i--){
-    const e = enemies[i];
-    e.y += e.vy;
+  boss.bullets = boss.bullets.filter(
+    b => b.x>-40 && b.x<W+40 && b.y>-40 && b.y<H+40
+  );
 
-    if(e.y > H+20) enemies.splice(i,1);
-
-    for(let j=player.bullets.length-1;j>=0;j--){
-      const b = player.bullets[j];
-      if(Math.hypot(b.x-e.x,b.y-e.y)<e.size){
-        score+=10;
-        enemies.splice(i,1);
-        player.bullets.splice(j,1);
-        break;
-      }
+  /* COLLISÃO PLAYER ← BOSS */
+  boss.bullets.forEach(b=>{
+    if(Math.hypot(player.x-b.x, player.y-b.y) < player.size + b.r){
+      gameState = STATE.GAMEOVER;
+      document.getElementById("menu").style.display="flex";
+      document.querySelector("#menu h1").textContent="💀 GAME OVER";
     }
-  }
+  });
 
   document.getElementById("score").textContent = score;
   document.getElementById("phase").textContent = phase;
@@ -176,32 +193,41 @@ function update(){
 /* ========================= DRAW ========================= */
 
 function render(){
-  ctx.fillStyle="#000";
-  ctx.fillRect(0,0,W,H);
 
-  if(gameState===STATE.PLAYING){
-    // player
+  ctx.clearRect(0,0,W,H);
+
+  /* BOSS */
+  ctx.fillStyle="#b71c1c";
+  ctx.beginPath();
+  ctx.arc(boss.x,boss.y,boss.radius,0,Math.PI*2);
+  ctx.fill();
+
+  ctx.fillStyle="#ff5252";
+  ctx.beginPath();
+  ctx.arc(boss.x,boss.y,10,0,Math.PI*2);
+  ctx.fill();
+
+  /* BOSS BULLETS */
+  ctx.fillStyle="#ff1744";
+  boss.bullets.forEach(b=>{
+    ctx.beginPath();
+    ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
+    ctx.fill();
+  });
+
+  if(gameState === STATE.PLAYING){
+    /* PLAYER */
     ctx.fillStyle="#00e5ff";
     ctx.beginPath();
-    ctx.moveTo(player.x,player.y-14);
-    ctx.lineTo(player.x-12,player.y+12);
-    ctx.lineTo(player.x+12,player.y+12);
+    ctx.moveTo(player.x,player.y-12);
+    ctx.lineTo(player.x-10,player.y+10);
+    ctx.lineTo(player.x+10,player.y+10);
     ctx.fill();
 
-    // bullets
+    /* PLAYER BULLETS */
     player.bullets.forEach(b=>{
       ctx.beginPath();
       ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
-      ctx.fill();
-    });
-
-    // enemies
-    enemies.forEach(e=>{
-      ctx.fillStyle="#ffeb3b";
-      ctx.beginPath();
-      ctx.moveTo(e.x,e.y-e.size);
-      ctx.lineTo(e.x-e.size,e.y+e.size);
-      ctx.lineTo(e.x+e.size,e.y+e.size);
       ctx.fill();
     });
   }
@@ -221,8 +247,9 @@ loop();
 document.getElementById("startBtn").onclick = ()=>{
   score=0;
   phase=1;
-  enemies.length=0;
-  player.bullets.length=0;
+  player.bullets=[];
+  boss.bullets=[];
+  boss.life=boss.maxLife;
   gameState=STATE.PLAYING;
   document.getElementById("menu").style.display="none";
 };
@@ -230,3 +257,449 @@ document.getElementById("startBtn").onclick = ()=>{
 
 </body>
 </html>
+<script>
+/* ============================================================
+   PARTE 2 — INIMIGOS PEQUENOS (TRIÂNGULOS)
+   ============================================================ */
+
+/* ---------- INIMIGOS ---------- */
+
+const enemies = [];
+
+const ENEMY_TYPES = {
+  SMALL: { size: 12, life: 1, speed: 1.6, score: 10 },
+  MEDIUM:{ size: 18, life: 3, speed: 1.1, score: 30 }
+};
+
+let enemySpawnTimer = 0;
+
+/* ---------- SPAWN ---------- */
+
+function spawnEnemy(){
+  const t = Math.random() < 0.7 ? ENEMY_TYPES.SMALL : ENEMY_TYPES.MEDIUM;
+
+  enemies.push({
+    x: Math.random() * (W - 40) + 20,
+    y: -30,
+    vx: (Math.random() - 0.5) * 1.2,
+    vy: t.speed,
+    size: t.size,
+    life: t.life,
+    score: t.score
+  });
+}
+
+/* ---------- UPDATE INIMIGOS ---------- */
+
+function updateEnemies(){
+
+  enemySpawnTimer++;
+  const spawnRate = Math.max(50 - phase * 2, 20);
+
+  if(enemySpawnTimer > spawnRate){
+    enemySpawnTimer = 0;
+    spawnEnemy();
+  }
+
+  for(let i = enemies.length - 1; i >= 0; i--){
+    const e = enemies[i];
+
+    e.x += e.vx;
+    e.y += e.vy;
+
+    /* Saiu da tela */
+    if(e.y > H + 40){
+      enemies.splice(i,1);
+      continue;
+    }
+
+    /* Colisão com player */
+    if(Math.hypot(player.x - e.x, player.y - e.y) < player.size + e.size){
+      gameState = STATE.GAMEOVER;
+      document.getElementById("menu").style.display="flex";
+      document.querySelector("#menu h1").textContent="💀 GAME OVER";
+      return;
+    }
+
+    /* Colisão com tiros do player */
+    for(let j = player.bullets.length - 1; j >= 0; j--){
+      const b = player.bullets[j];
+      if(Math.hypot(b.x - e.x, b.y - e.y) < e.size){
+        e.life--;
+        player.bullets.splice(j,1);
+
+        if(e.life <= 0){
+          score += e.score;
+          enemies.splice(i,1);
+        }
+        break;
+      }
+    }
+  }
+}
+
+/* ---------- DRAW INIMIGOS ---------- */
+
+function drawEnemies(){
+
+  enemies.forEach(e=>{
+    ctx.fillStyle = e.life === 1 ? "#ffeb3b" : "#ff9800";
+
+    ctx.beginPath();
+    ctx.moveTo(e.x, e.y - e.size);
+    ctx.lineTo(e.x - e.size, e.y + e.size);
+    ctx.lineTo(e.x + e.size, e.y + e.size);
+    ctx.closePath();
+    ctx.fill();
+
+    /* núcleo */
+    ctx.fillStyle="#000";
+    ctx.beginPath();
+    ctx.arc(e.x, e.y + 2, 3, 0, Math.PI*2);
+    ctx.fill();
+  });
+}
+
+/* ============================================================
+   INTEGRAÇÃO SEGURA COM ENGINE EXISTENTE
+   ============================================================ */
+
+const __update_part2 = update;
+update = function(){
+  if(gameState === STATE.PLAYING){
+    updateEnemies();
+  }
+  __update_part2();
+};
+
+const __render_part2 = render;
+render = function(){
+  __render_part2();
+  if(gameState === STATE.PLAYING){
+    drawEnemies();
+  }
+};
+</script>
+<script>
+/* ============================================================
+   PARTE 3 — INIMIGOS ATIRADORES (NAVES MÉDIAS)
+   ============================================================ */
+
+/* ---------- ENEMIGOS ATIRADORES ---------- */
+
+const shooterEnemies = [];
+let shooterSpawnTimer = 0;
+
+/* ---------- SPAWN ---------- */
+
+function spawnShooterEnemy(){
+  shooterEnemies.push({
+    x: Math.random() * (W - 60) + 30,
+    y: -40,
+    size: 18,
+    life: 3,
+    vy: 1.2,
+    shootTimer: 0,
+    bullets: []
+  });
+}
+
+/* ---------- UPDATE ATIRADORES ---------- */
+
+function updateShooterEnemies(){
+
+  shooterSpawnTimer++;
+  const spawnRate = Math.max(260 - phase * 10, 120);
+
+  if(shooterSpawnTimer > spawnRate){
+    shooterSpawnTimer = 0;
+    spawnShooterEnemy();
+  }
+
+  for(let i = shooterEnemies.length - 1; i >= 0; i--){
+    const e = shooterEnemies[i];
+
+    e.y += e.vy;
+    e.shootTimer++;
+
+    /* Saiu da tela */
+    if(e.y > H + 50){
+      shooterEnemies.splice(i,1);
+      continue;
+    }
+
+    /* Disparo */
+    if(e.shootTimer > 60){
+      e.shootTimer = 0;
+
+      e.bullets.push({
+        x: e.x,
+        y: e.y,
+        angle: Math.PI / 2,
+        speed: 2.4 + phase * 0.08,
+        radius: 4
+      });
+    }
+
+    /* Update tiros */
+    for(let j = e.bullets.length - 1; j >= 0; j--){
+      const b = e.bullets[j];
+      b.x += Math.cos(b.angle) * b.speed;
+      b.y += Math.sin(b.angle) * b.speed;
+
+      /* Colisão com player */
+      if(Math.hypot(player.x - b.x, player.y - b.y) < player.size + b.radius){
+        gameState = STATE.GAMEOVER;
+        document.getElementById("menu").style.display="flex";
+        document.querySelector("#menu h1").textContent="💀 GAME OVER";
+        return;
+      }
+
+      if(b.y > H + 20){
+        e.bullets.splice(j,1);
+      }
+    }
+
+    /* Colisão com tiros do player */
+    for(let j = player.bullets.length - 1; j >= 0; j--){
+      const b = player.bullets[j];
+      if(Math.hypot(b.x - e.x, b.y - e.y) < e.size){
+        e.life--;
+        player.bullets.splice(j,1);
+
+        if(e.life <= 0){
+          score += 40;
+          shooterEnemies.splice(i,1);
+        }
+        break;
+      }
+    }
+  }
+}
+
+/* ---------- DRAW ATIRADORES ---------- */
+
+function drawShooterEnemies(){
+
+  shooterEnemies.forEach(e=>{
+
+    /* Corpo */
+    ctx.fillStyle="#f44336";
+    ctx.fillRect(e.x - 12, e.y - 12, 24, 24);
+
+    /* Núcleo */
+    ctx.fillStyle="#ffcdd2";
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, 4, 0, Math.PI*2);
+    ctx.fill();
+
+    /* Tiros */
+    ctx.fillStyle="#ff5252";
+    e.bullets.forEach(b=>{
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.radius, 0, Math.PI*2);
+      ctx.fill();
+    });
+  });
+}
+
+/* ============================================================
+   INTEGRAÇÃO SEGURA
+   ============================================================ */
+
+const __update_part3 = update;
+update = function(){
+  if(gameState === STATE.PLAYING){
+    updateShooterEnemies();
+  }
+  __update_part3();
+};
+
+const __render_part3 = render;
+render = function(){
+  __render_part3();
+  if(gameState === STATE.PLAYING){
+    drawShooterEnemies();
+  }
+};
+</script>
+<script>
+/* ============================================================
+   PARTE 4 — SISTEMA DE ARMAS & POWER-UPS
+   ============================================================ */
+
+/* ---------- TIPOS DE ARMAS ---------- */
+
+const WEAPONS = {
+  BASIC: "basic",
+  DOUBLE: "double",
+  SPREAD: "spread",
+  RAPID: "rapid"
+};
+
+let currentWeapon = WEAPONS.BASIC;
+let weaponTimer = 0;
+
+/* ---------- POWER-UPS ---------- */
+
+const powerUps = [];
+
+/* ---------- SPAWN POWER-UP ---------- */
+
+function spawnPowerUp(x, y){
+  const types = Object.values(WEAPONS);
+  powerUps.push({
+    x,
+    y,
+    type: types[Math.floor(Math.random() * types.length)],
+    radius: 10,
+    vy: 1.2
+  });
+}
+
+/* ---------- UPDATE POWER-UPS ---------- */
+
+function updatePowerUps(){
+
+  for(let i = powerUps.length - 1; i >= 0; i--){
+    const p = powerUps[i];
+    p.y += p.vy;
+
+    if(p.y > H + 20){
+      powerUps.splice(i,1);
+      continue;
+    }
+
+    /* Coleta */
+    if(Math.hypot(player.x - p.x, player.y - p.y) < player.size + p.radius){
+      activatePowerUp(p.type);
+      powerUps.splice(i,1);
+    }
+  }
+}
+
+/* ---------- ATIVA POWER-UP ---------- */
+
+function activatePowerUp(type){
+  currentWeapon = type;
+  weaponTimer = 600; // duração
+}
+
+/* ---------- OVERRIDE SHOOT PLAYER ---------- */
+
+const __shootPlayer_base = shootPlayer;
+shootPlayer = function(){
+
+  if(currentWeapon === WEAPONS.BASIC){
+    __shootPlayer_base();
+  }
+
+  if(currentWeapon === WEAPONS.DOUBLE){
+    player.bullets.push(
+      { x: player.x - 6, y: player.y, speed: 7, radius: 3 },
+      { x: player.x + 6, y: player.y, speed: 7, radius: 3 }
+    );
+  }
+
+  if(currentWeapon === WEAPONS.SPREAD){
+    [-0.3, 0, 0.3].forEach(a=>{
+      player.bullets.push({
+        x: player.x,
+        y: player.y,
+        speed: 6,
+        angle: -Math.PI/2 + a,
+        radius: 3
+      });
+    });
+  }
+
+  if(currentWeapon === WEAPONS.RAPID){
+    player.bullets.push({
+      x: player.x,
+      y: player.y,
+      speed: 9,
+      radius: 2
+    });
+  }
+};
+
+/* ---------- UPDATE ARMAS ---------- */
+
+const __update_part4 = update;
+update = function(){
+
+  if(gameState === STATE.PLAYING){
+
+    updatePowerUps();
+
+    if(weaponTimer > 0){
+      weaponTimer--;
+      if(weaponTimer === 0){
+        currentWeapon = WEAPONS.BASIC;
+      }
+    }
+  }
+
+  __update_part4();
+};
+
+/* ---------- DRAW POWER-UPS ---------- */
+
+function drawPowerUps(){
+
+  powerUps.forEach(p=>{
+    ctx.fillStyle="#00e676";
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.radius, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.fillStyle="#000";
+    ctx.font="10px Arial";
+    ctx.fillText(p.type[0].toUpperCase(), p.x - 3, p.y + 4);
+  });
+}
+
+/* ---------- INTEGRAÇÃO DRAW ---------- */
+
+const __render_part4 = render;
+render = function(){
+
+  __render_part4();
+
+  if(gameState === STATE.PLAYING){
+    drawPowerUps();
+  }
+};
+
+/* ============================================================
+   DROP DE POWER-UP AO MATAR INIMIGOS
+   ============================================================ */
+
+/* Hook nos inimigos normais */
+const __updateEnemies_drop = updateEnemies;
+updateEnemies = function(){
+  __updateEnemies_drop();
+
+  enemies.forEach((e,i)=>{
+    if(e.life <= 0){
+      if(Math.random() < 0.15){
+        spawnPowerUp(e.x, e.y);
+      }
+    }
+  });
+};
+
+/* Hook nos atiradores */
+const __updateShooters_drop = updateShooterEnemies;
+updateShooterEnemies = function(){
+  __updateShooters_drop();
+
+  shooterEnemies.forEach((e,i)=>{
+    if(e.life <= 0){
+      if(Math.random() < 0.25){
+        spawnPowerUp(e.x, e.y);
+      }
+    }
+  });
+};
+</script>
