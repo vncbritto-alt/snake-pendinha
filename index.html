@@ -703,3 +703,241 @@ updateShooterEnemies = function(){
   });
 };
 </script>
+<script>
+/* ============================================================
+   PARTE 5 — EFEITOS VISUAIS & POLISH FINAL
+   ============================================================ */
+
+/* ---------- PARTICULAS ---------- */
+
+const particles = [];
+
+function spawnParticles(x,y,color,amount=16){
+  for(let i=0;i<amount;i++){
+    particles.push({
+      x,y,
+      vx:(Math.random()-0.5)*4,
+      vy:(Math.random()-0.5)*4,
+      life:30,
+      color
+    });
+  }
+}
+
+function updateParticles(){
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+    p.x+=p.vx;
+    p.y+=p.vy;
+    p.life--;
+    if(p.life<=0) particles.splice(i,1);
+  }
+}
+
+function drawParticles(){
+  particles.forEach(p=>{
+    ctx.globalAlpha=p.life/30;
+    ctx.fillStyle=p.color;
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,3,0,Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha=1;
+  });
+}
+
+/* ---------- SHAKE ---------- */
+
+let screenShake={time:0,strength:0};
+
+function triggerShake(str=6,t=12){
+  screenShake.strength=str;
+  screenShake.time=t;
+}
+
+function applyShake(){
+  if(screenShake.time>0){
+    screenShake.time--;
+    ctx.translate(
+      (Math.random()-0.5)*screenShake.strength,
+      (Math.random()-0.5)*screenShake.strength
+    );
+  }
+}
+
+/* ---------- OVERRIDE DRAW ---------- */
+
+const __render_fx = render;
+render = function(){
+
+  ctx.save();
+  applyShake();
+
+  __render_fx();
+  drawParticles();
+
+  ctx.restore();
+};
+
+/* ---------- OVERRIDE UPDATE ---------- */
+
+const __update_fx = update;
+update = function(){
+  updateParticles();
+  __update_fx();
+};
+
+/* ============================================================
+   HIT FX — PLAYER → INIMIGOS
+   ============================================================ */
+
+const __updateEnemies_fx = updateEnemies;
+updateEnemies = function(){
+  __updateEnemies_fx();
+
+  enemies.forEach(e=>{
+    if(e.life<=0){
+      spawnParticles(e.x,e.y,"#ffeb3b",18);
+      triggerShake(4,8);
+    }
+  });
+};
+
+/* ============================================================
+   HIT FX — PLAYER → SHOOTERS
+   ============================================================ */
+
+const __updateShooters_fx = updateShooterEnemies;
+updateShooterEnemies = function(){
+  __updateShooters_fx();
+
+  shooterEnemies.forEach(e=>{
+    if(e.life<=0){
+      spawnParticles(e.x,e.y,"#ff5252",24);
+      triggerShake(6,10);
+    }
+  });
+};
+
+/* ============================================================
+   HIT FX — PLAYER → BOSS
+   ============================================================ */
+
+const __bossHitCheck_fx = checkBossCollisions;
+checkBossCollisions = function(){
+
+  const prevLife = boss ? boss.life : 0;
+  __bossHitCheck_fx();
+
+  if(boss && boss.life < prevLife){
+    spawnParticles(boss.x,boss.y,"#ff1744",30);
+    triggerShake(8,12);
+  }
+};
+
+/* ============================================================
+   BOSS DEATH FX
+   ============================================================ */
+
+const __resetBoss_fx = resetBoss;
+resetBoss = function(){
+
+  spawnParticles(boss.x,boss.y,"#ff1744",60);
+  triggerShake(14,18);
+
+  __resetBoss_fx();
+};
+
+/* ============================================================
+   FUNDO DINÂMICO POR FASE
+   ============================================================ */
+
+const bgPalettes=[
+  ["#0b1d13","#1b5e20"],
+  ["#102027","#263238"],
+  ["#1a237e","#0d47a1"],
+  ["#311b92","#512da8"],
+  ["#3e2723","#5d4037"],
+  ["#004d40","#00695c"]
+];
+
+let bgScroll=0;
+
+function drawBackground(){
+
+  bgScroll+=0.6+phase*0.1;
+
+  const colors=bgPalettes[(phase-1)%bgPalettes.length];
+  const grad=ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,colors[0]);
+  grad.addColorStop(1,colors[1]);
+
+  ctx.fillStyle=grad;
+  ctx.fillRect(0,0,W,H);
+
+  ctx.fillStyle="rgba(255,255,255,0.05)";
+  for(let i=0;i<20;i++){
+    ctx.beginPath();
+    ctx.arc(
+      (i*60+bgScroll)%W,
+      (i*90+bgScroll*0.4)%H,
+      24,
+      0,
+      Math.PI*2
+    );
+    ctx.fill();
+  }
+}
+
+/* ---------- SUBSTITUI BACKGROUND ---------- */
+
+const __render_bg = render;
+render = function(){
+
+  drawBackground();
+  __render_bg();
+};
+
+/* ============================================================
+   UI PULSE
+   ============================================================ */
+
+let uiPulse=0;
+
+function drawAnimatedUI(){
+  uiPulse+=0.05;
+  const scale=1+Math.sin(uiPulse)*0.05;
+
+  ctx.save();
+  ctx.fillStyle="#fff";
+  ctx.font="bold 16px Arial";
+  ctx.translate(10,24);
+  ctx.scale(scale,scale);
+  ctx.fillText("Score: "+score,0,0);
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(10,48);
+  ctx.scale(scale,scale);
+  ctx.fillText("Fase: "+phase,0,0);
+  ctx.restore();
+}
+
+/* ---------- UI OVERRIDE ---------- */
+
+const __render_ui = render;
+render = function(){
+  __render_ui();
+  drawAnimatedUI();
+};
+
+/* ============================================================
+   FINAL
+   ============================================================ */
+
+console.log("🔥 Pendinha Boss Shooter FINALIZADO");
+console.log("✔ Boss central");
+console.log("✔ Inimigos variados");
+console.log("✔ Power-ups");
+console.log("✔ Efeitos arcade");
+console.log("✔ Jogo visível e funcional");
+</script>
