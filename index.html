@@ -61,7 +61,7 @@ canvas {
   align-items: center;
   justify-content: center;
   color: white;
-  background: rgba(0,0,0,0.6);
+  background: rgba(0,0,0,0.65);
   z-index: 20;
 }
 
@@ -103,7 +103,8 @@ canvas {
   <canvas id="game" width="360" height="520"></canvas>
 
   <div id="ui">
-    Pontos: <span id="score">0</span> | Fase: <span id="phase">1</span>
+    Pontos: <span id="score">0</span> |
+    Fase: <span id="phase">1</span>
   </div>
 
   <div id="menu">
@@ -115,7 +116,9 @@ canvas {
 </div>
 
 <script>
-/* ====================== CONFIG ====================== */
+/* ============================================================
+   ====================== CONFIGURAÇÃO ========================
+   ============================================================ */
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -136,11 +139,13 @@ let running = false;
 let bgOffset = 0;
 let attackCooldown = 0;
 
-/* ====================== SNAKE ====================== */
+/* ============================================================
+   ====================== PLAYER SNAKE ========================
+   ============================================================ */
 
 const snake = {
-  x: W/2,
-  y: H/2,
+  x: W / 2,
+  y: H / 2,
   angle: 0,
   speed: 2.2,
   length: 12,
@@ -149,296 +154,399 @@ const snake = {
   tongue: 0
 };
 
-/* ====================== FOOD ====================== */
+/* ============================================================
+   ====================== GAME OBJECTS ========================
+   ============================================================ */
 
 let food = {};
-
-/* ====================== ENEMIES ====================== */
-
 let enemySnakes = [];
 let boss = null;
 
-/* ====================== FULLSCREEN ====================== */
+/* ============================================================
+   ====================== FULLSCREEN ==========================
+   ============================================================ */
 
 document.getElementById("fullscreenBtn").onclick = () => {
-  if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-  else document.exitFullscreen();
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen();
+  } else {
+    document.exitFullscreen();
+  }
 };
 
-/* ====================== MENU ====================== */
+/* ============================================================
+   ====================== MENU / CORES ========================
+   ============================================================ */
 
 const colorsDiv = document.getElementById("colors");
-COLORS.forEach(c=>{
-  const d=document.createElement("div");
-  d.className="color";
-  d.style.background=c;
-  if(c===selectedColor) d.classList.add("selected");
-  d.onclick=()=>{
-    selectedColor=c;
-    document.querySelectorAll(".color").forEach(e=>e.classList.remove("selected"));
-    d.classList.add("selected");
+
+COLORS.forEach(color => {
+  const div = document.createElement("div");
+  div.className = "color";
+  div.style.background = color;
+  if (color === selectedColor) div.classList.add("selected");
+
+  div.onclick = () => {
+    selectedColor = color;
+    document.querySelectorAll(".color").forEach(c => c.classList.remove("selected"));
+    div.classList.add("selected");
   };
-  colorsDiv.appendChild(d);
+
+  colorsDiv.appendChild(div);
 });
 
-document.getElementById("startBtn").onclick=startGame;
+document.getElementById("startBtn").onclick = startGame;
 
-/* ====================== INPUT ====================== */
+/* ============================================================
+   ====================== INPUT ===============================
+   ============================================================ */
 
-canvas.addEventListener("mousemove",e=>{
-  if(!running)return;
-  const r=canvas.getBoundingClientRect();
-  const mx=(e.clientX-r.left)*(W/canvas.clientWidth);
-  const my=(e.clientY-r.top)*(H/canvas.clientHeight);
-  snake.angle=Math.atan2(my-snake.y,mx-snake.x);
+canvas.addEventListener("mousemove", e => {
+  if (!running) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) * (W / canvas.clientWidth);
+  const my = (e.clientY - rect.top) * (H / canvas.clientHeight);
+  snake.angle = Math.atan2(my - snake.y, mx - snake.x);
 });
 
-canvas.addEventListener("mousedown",()=>{
-  if(!running)return;
-  if(attackCooldown<=0){
-    snake.tongue+=2;
-    attackCooldown=30;
-    attackBoss();
+/* Ataque (usado na PARTE 2) */
+canvas.addEventListener("mousedown", () => {
+  if (!running) return;
+  if (attackCooldown <= 0) {
+    attackCooldown = 25;
+    onPlayerAttack(); // definido na PARTE 2
   }
 });
 
-/* ====================== START ====================== */
+/* ============================================================
+   ====================== START / RESET =======================
+   ============================================================ */
 
-function startGame(){
-  document.getElementById("menu").style.display="none";
-  score=0; phase=1;
+function startGame() {
+  document.getElementById("menu").style.display = "none";
+  score = 0;
+  phase = 1;
   updateUI();
   resetSnake();
-  enemySnakes=[];
+  enemySnakes = [];
   spawnFood();
   spawnBoss();
-  running=true;
+  running = true;
 }
 
-function resetSnake(){
-  snake.x=W/2; snake.y=H/2;
-  snake.body=[]; snake.length=12;
+function resetSnake() {
+  snake.x = W / 2;
+  snake.y = H / 2;
+  snake.body = [];
+  snake.length = 12;
 }
 
-/* ====================== SPAWN ====================== */
+/* ============================================================
+   ====================== SPAWN ===============================
+   ============================================================ */
 
-function spawnFood(){
-  food={
-    x:Math.random()*(W-40)+20,
-    y:Math.random()*(H-40)+20,
-    angle:Math.random()*Math.PI*2,
-    speed:1.4
+function spawnFood() {
+  food = {
+    x: Math.random() * (W - 40) + 20,
+    y: Math.random() * (H - 40) + 20,
+    angle: Math.random() * Math.PI * 2,
+    speed: 1.4
   };
 }
 
-function spawnEnemy(){
-  const size=Math.floor(Math.random()*4)+2;
+function spawnEnemySnake(size = 3) {
   enemySnakes.push({
-    x:Math.random()*(W-80)+40,
-    y:Math.random()*(H-80)+40,
-    angle:Math.random()*Math.PI*2,
-    speed:1.2,
-    size:size,
-    body:[],
-    length:size*6
+    x: Math.random() * (W - 80) + 40,
+    y: Math.random() * (H - 80) + 40,
+    angle: Math.random() * Math.PI * 2,
+    speed: 1.1,
+    size,
+    length: size * 6,
+    body: []
   });
 }
 
-function spawnBoss(){
-  boss={
-    x:W/2,y:80,
-    angle:Math.PI/2,
-    speed:1+phase*0.1,
-    life:2+phase,
-    maxLife:2+phase,
-    body:[],
-    length:30+phase*5
+function spawnBoss() {
+  boss = {
+    x: W / 2,
+    y: 80,
+    angle: Math.PI / 2,
+    speed: 0.8 + phase * 0.08,
+    life: 3 + phase,
+    maxLife: 3 + phase,
+    length: 30 + phase * 4,
+    body: []
   };
 }
 
-/* ====================== UPDATE ====================== */
+/* ============================================================
+   ====================== UI ================================
+   ============================================================ */
 
-function update(){
-  if(!running)return;
+function updateUI() {
+  document.getElementById("score").textContent = score;
+  document.getElementById("phase").textContent = phase;
+}
 
-  bgOffset+=0.3;
-  if(attackCooldown>0)attackCooldown--;
+/* ============================================================
+   ====================== GAME OVER ===========================
+   ============================================================ */
 
-  snake.x+=Math.cos(snake.angle)*snake.speed;
-  snake.y+=Math.sin(snake.angle)*snake.speed;
+function gameOver() {
+  running = false;
+  document.getElementById("menu").style.display = "flex";
+}
 
-  // Limites
-  if(snake.x<10||snake.x>W-10||snake.y<10||snake.y>H-10){
-    gameOver(); return;
-  }
+/* ============================================================
+   ====================== LOOP BASE ===========================
+   ============================================================ */
 
-  snake.body.unshift({x:snake.x,y:snake.y});
-  if(snake.body.length>snake.length)snake.body.pop();
+function loop() {
+  update();      // lógica principal
+  draw();        // render
+  requestAnimationFrame(loop);
+}
 
-  snake.eyeBlink=(snake.eyeBlink+1)%220;
-  snake.tongue+=0.15;
+loop();
+/* ============================================================
+   ====================== PROJÉTEIS ===========================
+   ============================================================ */
 
-  // Food
-  food.angle+=(Math.random()-0.5)*0.2;
-  food.x+=Math.cos(food.angle)*food.speed;
-  food.y+=Math.sin(food.angle)*food.speed;
-  food.x=Math.max(20,Math.min(W-20,food.x));
-  food.y=Math.max(20,Math.min(H-20,food.y));
+let playerShots = [];
+let bossShots = [];
 
-  if(Math.hypot(snake.x-food.x,snake.y-food.y)<16){
-    snake.length+=4;
-    score++;
+/* ============================================================
+   ====================== ATAQUE PLAYER =======================
+   ============================================================ */
+
+function onPlayerAttack() {
+  const shot = {
+    x: snake.x,
+    y: snake.y,
+    angle: snake.angle,
+    speed: 6,
+    radius: 4
+  };
+  playerShots.push(shot);
+}
+
+/* ============================================================
+   ====================== UPDATE GERAL ========================
+   ============================================================ */
+
+function update() {
+  if (!running) return;
+
+  bgOffset += 0.4;
+  if (attackCooldown > 0) attackCooldown--;
+
+  /* ---------- MOVIMENTO PLAYER ---------- */
+  snake.x += Math.cos(snake.angle) * snake.speed;
+  snake.y += Math.sin(snake.angle) * snake.speed;
+
+  // Limites da tela (não atravessa)
+  snake.x = Math.max(10, Math.min(W - 10, snake.x));
+  snake.y = Math.max(10, Math.min(H - 10, snake.y));
+
+  snake.body.unshift({ x: snake.x, y: snake.y });
+  if (snake.body.length > snake.length) snake.body.pop();
+
+  snake.eyeBlink = (snake.eyeBlink + 1) % 220;
+  snake.tongue += 0.15;
+
+  /* ---------- COMIDA ---------- */
+  food.angle += (Math.random() - 0.5) * 0.2;
+  food.x += Math.cos(food.angle) * food.speed;
+  food.y += Math.sin(food.angle) * food.speed;
+
+  food.x = Math.max(20, Math.min(W - 20, food.x));
+  food.y = Math.max(20, Math.min(H - 20, food.y));
+
+  if (Math.hypot(snake.x - food.x, snake.y - food.y) < 16) {
+    snake.length += 4;
+    score += 1;
     updateUI();
     spawnFood();
-    if(score%5===0)spawnEnemy();
+
+    if (score % 5 === 0) {
+      const size = Math.floor(Math.random() * 4) + 2;
+      spawnEnemySnake(size);
+    }
   }
 
-  // Enemies
-  enemySnakes.forEach((e,i)=>{
-    e.angle+=(Math.random()-0.5)*0.1;
-    e.x+=Math.cos(e.angle)*e.speed;
-    e.y+=Math.sin(e.angle)*e.speed;
-    e.body.unshift({x:e.x,y:e.y});
-    if(e.body.length>e.length)e.body.pop();
-    if(Math.hypot(snake.x-e.x,snake.y-e.y)<14){
-      score+=e.size;
-      enemySnakes.splice(i,1);
+  /* ---------- COBRINHAS PEQUENAS ---------- */
+  enemySnakes.forEach((e, i) => {
+    e.angle += (Math.random() - 0.5) * 0.1;
+    e.x += Math.cos(e.angle) * e.speed;
+    e.y += Math.sin(e.angle) * e.speed;
+
+    e.body.unshift({ x: e.x, y: e.y });
+    if (e.body.length > e.length) e.body.pop();
+
+    // Fogem do player
+    if (Math.hypot(snake.x - e.x, snake.y - e.y) < 60) {
+      e.angle = Math.atan2(e.y - snake.y, e.x - snake.x);
+    }
+
+    // Player come cobrinhas
+    if (Math.hypot(snake.x - e.x, snake.y - e.y) < 14) {
+      score += e.size;
+      enemySnakes.splice(i, 1);
       updateUI();
     }
   });
 
+  /* ---------- PLAYER SHOTS ---------- */
+  playerShots.forEach((s, i) => {
+    s.x += Math.cos(s.angle) * s.speed;
+    s.y += Math.sin(s.angle) * s.speed;
+
+    if (s.x < 0 || s.x > W || s.y < 0 || s.y > H) {
+      playerShots.splice(i, 1);
+    }
+
+    // Acerto no boss
+    if (boss && Math.hypot(s.x - boss.x, s.y - boss.y) < 20) {
+      boss.life--;
+      playerShots.splice(i, 1);
+
+      if (boss.life <= 0) {
+        score += 10;
+        phase++;
+        updateUI();
+
+        if (phase > MAX_PHASE) {
+          alert("🏆 Você zerou o jogo!");
+          gameOver();
+          return;
+        }
+
+        spawnBoss();
+      }
+    }
+  });
+
+  /* ---------- BOSS ---------- */
   updateBoss();
+
+  /* ---------- BOSS SHOTS ---------- */
+  bossShots.forEach((b, i) => {
+    b.x += Math.cos(b.angle) * b.speed;
+    b.y += Math.sin(b.angle) * b.speed;
+
+    if (Math.hypot(snake.x - b.x, snake.y - b.y) < 10) {
+      gameOver();
+    }
+
+    if (b.x < 0 || b.x > W || b.y < 0 || b.y > H) {
+      bossShots.splice(i, 1);
+    }
+  });
 }
 
-/* ====================== BOSS ====================== */
+/* ============================================================
+   ====================== BOSS AI =============================
+   ============================================================ */
 
-function updateBoss(){
-  if(!boss)return;
-  boss.angle=Math.atan2(snake.y-boss.y,snake.x-boss.x);
-  boss.x+=Math.cos(boss.angle)*boss.speed;
-  boss.y+=Math.sin(boss.angle)*boss.speed;
-  boss.body.unshift({x:boss.x,y:boss.y});
-  if(boss.body.length>boss.length)boss.body.pop();
+let bossShootTimer = 0;
 
-  if(Math.hypot(snake.x-boss.x,snake.y-boss.y)<18){
+function updateBoss() {
+  if (!boss) return;
+
+  const dist = Math.hypot(snake.x - boss.x, snake.y - boss.y);
+
+  // Só persegue se estiver perto
+  if (dist < 220) {
+    boss.angle = Math.atan2(snake.y - boss.y, snake.x - boss.x);
+    boss.x += Math.cos(boss.angle) * boss.speed;
+    boss.y += Math.sin(boss.angle) * boss.speed;
+  }
+
+  boss.body.unshift({ x: boss.x, y: boss.y });
+  if (boss.body.length > boss.length) boss.body.pop();
+
+  // Colisão direta
+  if (dist < 18) {
     gameOver();
   }
-}
 
-function attackBoss(){
-  if(!boss)return;
-  if(Math.hypot(snake.x-boss.x,snake.y-boss.y)<25){
-    boss.life--;
-    if(boss.life<=0){
-      score+=10;
-      phase++;
-      if(phase>MAX_PHASE){
-        alert("🏆 Você zerou o jogo!");
-        gameOver();
-        return;
-      }
-      spawnBoss();
-      updateUI();
-    }
+  // Disparo do boss
+  bossShootTimer++;
+  const shootDelay = Math.max(90 - phase * 2, 30);
+
+  if (bossShootTimer > shootDelay) {
+    bossShootTimer = 0;
+    bossShots.push({
+      x: boss.x,
+      y: boss.y,
+      angle: boss.angle,
+      speed: 2 + phase * 0.05,
+      radius: 4
+    });
   }
 }
 
-/* ====================== DRAW ====================== */
+/* ============================================================
+   ====================== DRAW ================================
+   ============================================================ */
 
-function drawBackground(){
-  ctx.fillStyle="#102e1c";
-  ctx.fillRect(0,0,W,H);
-  ctx.fillStyle="rgba(255,255,255,0.05)";
-  for(let i=0;i<20;i++){
-    ctx.beginPath();
-    ctx.arc((i*40+bgOffset)%W,(i*30)%H,20,0,Math.PI*2);
-    ctx.fill();
-  }
+function draw() {
+  drawBackground();
+  drawFood();
+  drawEnemies();
+  drawBoss();
+  drawPlayerShots();
+  drawBossShots();
+  drawSnake();
 }
 
-function drawSnake(){
-  ctx.fillStyle=selectedColor;
-  snake.body.forEach((p,i)=>{
+function drawPlayerShots() {
+  ctx.fillStyle = "#00e5ff";
+  playerShots.forEach(s => {
     ctx.beginPath();
-    ctx.arc(p.x,p.y,8-i*0.02,0,Math.PI*2);
+    ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
     ctx.fill();
   });
-  ctx.beginPath();
-  ctx.arc(snake.x,snake.y,10,0,Math.PI*2);
-  ctx.fill();
+}
 
-  if(snake.eyeBlink<180){
-    ctx.fillStyle="#000";
+function drawBossShots() {
+  ctx.fillStyle = "#ff5252";
+  bossShots.forEach(b => {
     ctx.beginPath();
-    ctx.arc(snake.x+Math.cos(snake.angle+0.5)*5,snake.y+Math.sin(snake.angle+0.5)*5,2,0,Math.PI*2);
-    ctx.arc(snake.x+Math.cos(snake.angle-0.5)*5,snake.y+Math.sin(snake.angle-0.5)*5,2,0,Math.PI*2);
+    ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
     ctx.fill();
-  }
-
-  ctx.strokeStyle="#ff1744";
-  ctx.beginPath();
-  ctx.moveTo(snake.x,snake.y);
-  ctx.lineTo(snake.x+Math.cos(snake.angle)*(10+Math.sin(snake.tongue)*6),
-             snake.y+Math.sin(snake.angle)*(10+Math.sin(snake.tongue)*6));
-  ctx.stroke();
+  });
 }
 
-function drawFood(){
-  ctx.fillStyle="#ffeb3b";
-  ctx.beginPath();
-  ctx.arc(food.x,food.y,6,0,Math.PI*2);
-  ctx.fill();
-}
-
-function drawEnemies(){
-  ctx.fillStyle="#2e7d32";
-  enemySnakes.forEach(e=>{
-    e.body.forEach((p,i)=>{
+function drawEnemies() {
+  ctx.fillStyle = "#2e7d32";
+  enemySnakes.forEach(e => {
+    e.body.forEach((p, i) => {
       ctx.beginPath();
-      ctx.arc(p.x,p.y,6-i*0.05,0,Math.PI*2);
+      ctx.arc(p.x, p.y, 6 - i * 0.05, 0, Math.PI * 2);
       ctx.fill();
     });
   });
 }
 
-function drawBoss(){
-  if(!boss)return;
-  ctx.fillStyle="#b71c1c";
-  boss.body.forEach((p,i)=>{
+function drawBoss() {
+  if (!boss) return;
+
+  ctx.fillStyle = "#b71c1c";
+  boss.body.forEach((p, i) => {
     ctx.beginPath();
-    ctx.arc(p.x,p.y,7-i*0.02,0,Math.PI*2);
+    ctx.arc(p.x, p.y, 7 - i * 0.02, 0, Math.PI * 2);
     ctx.fill();
   });
-  ctx.fillStyle="#fff";
-  ctx.fillRect(boss.x-15,boss.y-25,30,4);
-  ctx.fillStyle="#e53935";
-  ctx.fillRect(boss.x-15,boss.y-25,30*(boss.life/boss.maxLife),4);
+
+  // Barra de vida
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(boss.x - 20, boss.y - 30, 40, 5);
+  ctx.fillStyle = "#e53935";
+  ctx.fillRect(
+    boss.x - 20,
+    boss.y - 30,
+    40 * (boss.life / boss.maxLife),
+    5
+  );
 }
-
-/* ====================== UI ====================== */
-
-function updateUI(){
-  document.getElementById("score").textContent=score;
-  document.getElementById("phase").textContent=phase;
-}
-
-function gameOver(){
-  running=false;
-  document.getElementById("menu").style.display="flex";
-}
-
-/* ====================== LOOP ====================== */
-
-function loop(){
-  update();
-  drawBackground();
-  drawFood();
-  drawEnemies();
-  drawBoss();
-  drawSnake();
-  requestAnimationFrame(loop);
-}
-loop();
-</script>
-</body>
-</html>
