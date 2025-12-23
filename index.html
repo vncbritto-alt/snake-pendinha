@@ -6,51 +6,54 @@
 <title>Pendinha Boss Shooter</title>
 
 <style>
-*{box-sizing:border-box}
-html,body{
-  margin:0;padding:0;
-  background:#000;
-  font-family:Arial,Helvetica,sans-serif;
-  color:#fff;
-  overflow:hidden
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #000;
+  overflow: hidden;
+  font-family: Arial, Helvetica, sans-serif;
 }
-#gameContainer{
-  max-width:420px;
-  margin:0 auto;
-  position:relative
+
+#gameContainer {
+  max-width: 420px;
+  margin: 0 auto;
+  position: relative;
 }
-canvas{
-  width:100%;
-  display:block;
-  background:#000
+
+canvas {
+  width: 100%;
+  display: block;
+  background: linear-gradient(#020b18, #000);
 }
-#ui{
-  position:absolute;
-  top:10px;
-  left:10px;
-  font-size:14px;
-  z-index:10
+
+#ui {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  color: #fff;
+  font-size: 14px;
 }
-#menu{
-  position:absolute;
-  inset:0;
-  background:rgba(0,0,0,.85);
-  display:flex;
-  flex-direction:column;
-  justify-content:center;
-  align-items:center;
-  z-index:20
+
+#menu {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
 }
-button{
-  padding:12px 28px;
-  font-size:16px;
-  cursor:pointer
+
+button {
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
 }
 </style>
 </head>
 
 <body>
-
 <div id="gameContainer">
   <canvas id="game" width="360" height="520"></canvas>
 
@@ -60,232 +63,189 @@ button{
   </div>
 
   <div id="menu">
-    <h1>👾 Pendinha Boss Shooter</h1>
-    <p>Desvie. Atire. Sobreviva.</p>
+    <h2>👾 Pendinha Boss Shooter</h2>
     <button id="startBtn">▶ Iniciar</button>
   </div>
 </div>
 
 <script>
-/* ===================== CANVAS ===================== */
+/* ==================== BASE ==================== */
+
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
+
 const W = canvas.width;
 const H = canvas.height;
 
-/* ===================== STATE ===================== */
-let playing = false;
+let state = "menu";
 let score = 0;
 let phase = 1;
 
-/* ===================== INPUT ===================== */
-let mouseX = W/2;
-let mouseY = H-80;
-let mouseDown = false;
+const uiScore = document.getElementById("score");
+const uiPhase = document.getElementById("phase");
+const menu = document.getElementById("menu");
 
-canvas.addEventListener("mousemove",e=>{
+/* ==================== INPUT ==================== */
+
+const input = { x: W/2, y: H-60, shoot:false };
+
+canvas.addEventListener("mousemove", e => {
   const r = canvas.getBoundingClientRect();
-  mouseX = (e.clientX - r.left) * (W / r.width);
-  mouseY = (e.clientY - r.top)  * (H / r.height);
+  input.x = (e.clientX - r.left) * (W / r.width);
+  input.y = (e.clientY - r.top) * (H / r.height);
 });
-canvas.addEventListener("mousedown",()=>mouseDown=true);
-canvas.addEventListener("mouseup",()=>mouseDown=false);
 
-/* ===================== PLAYER ===================== */
+canvas.addEventListener("mousedown", () => input.shoot = true);
+canvas.addEventListener("mouseup", () => input.shoot = false);
+
+/* ==================== PLAYER ==================== */
+
 const player = {
-  x: W/2,
-  y: H-70,
-  bullets: [],
-  cooldown: 0
+  x: W/2, y: H-60,
+  cooldown: 0,
+  bullets: []
 };
 
-/* ===================== BOSS ===================== */
-const boss = {
-  x: W/2,
-  y: 90,
-  radius: 32,
-  life: 100,
-  maxLife: 100,
-  bullets: [],
-  timer: 0,
-  pattern: 0
-};
-
-/* ===================== START ===================== */
-document.getElementById("startBtn").onclick = ()=>{
-  playing = true;
-  score = 0;
-  phase = 1;
-  resetBoss();
-  player.bullets = [];
-  boss.bullets = [];
-  document.getElementById("menu").style.display="none";
-};
-
-/* ===================== RESET BOSS ===================== */
-function resetBoss(){
-  boss.x = W/2;
-  boss.y = 90;
-  boss.maxLife = 100 + phase * 40;
-  boss.life = boss.maxLife;
-  boss.timer = 0;
-  boss.pattern = phase % 3;
-  boss.bullets = [];
+function shoot() {
+  player.bullets.push({ x:player.x, y:player.y, speed:7 });
 }
 
-/* ===================== LOOP ===================== */
-function loop(){
-  update();
-  draw();
-  requestAnimationFrame(loop);
-}
-loop();
+function updatePlayer() {
+  player.x += (input.x - player.x) * 0.2;
+  player.y += (input.y - player.y) * 0.2;
 
-/* ===================== UPDATE ===================== */
-function update(){
-  if(!playing) return;
+  player.x = Math.max(15, Math.min(W-15, player.x));
+  player.y = Math.max(H/2, Math.min(H-15, player.y));
 
-  /* ---- PLAYER ---- */
-  player.x += (mouseX - player.x) * 0.25;
-  player.y += (mouseY - player.y) * 0.25;
+  if (player.cooldown > 0) player.cooldown--;
 
-  player.x = Math.max(15,Math.min(W-15,player.x));
-  player.y = Math.max(H/2,Math.min(H-15,player.y));
-
-  if(player.cooldown>0) player.cooldown--;
-
-  if(mouseDown && player.cooldown===0){
-    player.bullets.push({
-      x: player.x,
-      y: player.y,
-      vy: -7
-    });
+  if (input.shoot && player.cooldown === 0) {
+    shoot();
     player.cooldown = 12;
   }
-
-  player.bullets.forEach(b=>b.y+=b.vy);
-  player.bullets = player.bullets.filter(b=>b.y>-10);
-
-  /* ---- BOSS ---- */
-  boss.timer++;
-  const delay = Math.max(50 - phase*3, 15);
-  if(boss.timer > delay){
-    boss.timer = 0;
-    shootBoss();
-  }
-
-  boss.bullets.forEach(b=>{
-    b.x += b.vx;
-    b.y += b.vy;
-  });
-  boss.bullets = boss.bullets.filter(
-    b=>b.x>-30 && b.x<W+30 && b.y<H+30
-  );
-
-  /* ---- COLLISIONS ---- */
-  // player -> boss
-  player.bullets.forEach((b,i)=>{
-    if(Math.hypot(b.x-boss.x,b.y-boss.y)<boss.radius){
-      boss.life -= 10;
-      player.bullets.splice(i,1);
-      score += 10;
-    }
-  });
-
-  // boss -> player
-  boss.bullets.forEach(b=>{
-    if(Math.hypot(b.x-player.x,b.y-player.y)<12){
-      gameOver();
-    }
-  });
-
-  if(boss.life<=0){
-    phase++;
-    score += 100;
-    resetBoss();
-  }
-
-  document.getElementById("score").textContent = score;
-  document.getElementById("phase").textContent = phase;
 }
 
-/* ===================== BOSS PATTERNS ===================== */
-function shootBoss(){
+/* ==================== INIMIGOS PEQUENOS ==================== */
 
-  const spd = 2 + phase*0.15;
+const enemies = [];
 
-  // padrão 0 – triplo reto
-  if(boss.pattern===0){
-    [-0.25,0,0.25].forEach(a=>{
-      boss.bullets.push({
-        x: boss.x,
-        y: boss.y,
-        vx: Math.sin(a)*spd,
-        vy: Math.cos(a)*spd
-      });
+function spawnEnemy() {
+  enemies.push({
+    x: Math.random() * (W-40) + 20,
+    y: -20,
+    speed: 1.5 + phase * 0.1,
+    angle: Math.random() * Math.PI,
+    life: 1,
+    type: Math.random() < 0.5 ? "zigzag" : "straight"
+  });
+}
+
+function updateEnemies() {
+  enemies.forEach((e, i) => {
+    if (e.type === "zigzag") {
+      e.x += Math.sin(Date.now()*0.004) * 1.5;
+    }
+    e.y += e.speed;
+
+    // colisão com player
+    if (Math.hypot(player.x - e.x, player.y - e.y) < 16) {
+      gameOver();
+    }
+
+    // fora da tela
+    if (e.y > H+20) enemies.splice(i,1);
+  });
+}
+
+/* ==================== BOSS ==================== */
+
+const boss = {
+  x: W/2, y: 80,
+  life: 100,
+  bullets: [],
+  timer: 0
+};
+
+function resetBoss() {
+  boss.life = 100 + phase * 40;
+  boss.bullets = [];
+}
+
+function updateBoss() {
+  boss.timer++;
+  if (boss.timer > 40 - phase) {
+    boss.timer = 0;
+    boss.bullets.push({
+      x: boss.x,
+      y: boss.y,
+      angle: Math.PI/2 + (Math.random()-0.5),
+      speed: 2 + phase*0.1
     });
   }
 
-  // padrão 1 – leque
-  if(boss.pattern===1){
-    for(let i=-4;i<=4;i++){
-      boss.bullets.push({
-        x: boss.x,
-        y: boss.y,
-        vx: Math.sin(i*0.18)*spd,
-        vy: Math.cos(i*0.18)*spd
-      });
-    }
-  }
+  boss.bullets.forEach((b,i)=>{
+    b.x += Math.cos(b.angle)*b.speed;
+    b.y += Math.sin(b.angle)*b.speed;
 
-  // padrão 2 – espiral
-  if(boss.pattern===2){
-    for(let i=0;i<6;i++){
-      const ang = boss.timer*0.15 + i;
-      boss.bullets.push({
-        x: boss.x,
-        y: boss.y,
-        vx: Math.cos(ang)*spd,
-        vy: Math.sin(ang)*spd
-      });
+    if (Math.hypot(player.x-b.x, player.y-b.y) < 10) {
+      gameOver();
     }
-  }
+
+    if (b.y > H) boss.bullets.splice(i,1);
+  });
 }
 
-/* ===================== GAME OVER ===================== */
-function gameOver(){
-  playing = false;
-  document.getElementById("menu").style.display="flex";
+/* ==================== UPDATE ==================== */
+
+function update() {
+  if (state !== "play") return;
+
+  updatePlayer();
+  updateEnemies();
+  updateBoss();
+
+  // tiros do player
+  player.bullets.forEach((b,i)=>{
+    b.y -= b.speed;
+
+    enemies.forEach((e,ei)=>{
+      if (Math.hypot(b.x-e.x, b.y-e.y) < 12) {
+        enemies.splice(ei,1);
+        player.bullets.splice(i,1);
+        score += 10;
+      }
+    });
+
+    if (Math.hypot(b.x-boss.x, b.y-boss.y) < 30) {
+      boss.life -= 5;
+      player.bullets.splice(i,1);
+      score += 5;
+      if (boss.life <= 0) nextPhase();
+    }
+
+    if (b.y < 0) player.bullets.splice(i,1);
+  });
+
+  if (Math.random() < 0.02 + phase*0.005) spawnEnemy();
+
+  uiScore.textContent = score;
+  uiPhase.textContent = phase;
 }
 
-/* ===================== DRAW ===================== */
-function draw(){
-  ctx.fillStyle="#000";
-  ctx.fillRect(0,0,W,H);
+/* ==================== DRAW ==================== */
 
-  if(!playing) return;
-
-  // fundo animado simples
-  ctx.fillStyle="rgba(255,255,255,0.04)";
-  for(let i=0;i<20;i++){
-    ctx.beginPath();
-    ctx.arc(
-      (i*40 + Date.now()*0.03)%W,
-      (i*70)%H,
-      18,0,Math.PI*2
-    );
-    ctx.fill();
-  }
+function draw() {
+  ctx.clearRect(0,0,W,H);
 
   // player
   ctx.fillStyle="#00e5ff";
   ctx.beginPath();
-  ctx.moveTo(player.x,player.y-12);
-  ctx.lineTo(player.x-10,player.y+10);
-  ctx.lineTo(player.x+10,player.y+10);
+  ctx.moveTo(player.x, player.y-12);
+  ctx.lineTo(player.x-10, player.y+10);
+  ctx.lineTo(player.x+10, player.y+10);
   ctx.fill();
 
-  // player bullets
+  // tiros
   ctx.fillStyle="#00e5ff";
   player.bullets.forEach(b=>{
     ctx.beginPath();
@@ -293,30 +253,63 @@ function draw(){
     ctx.fill();
   });
 
+  // inimigos
+  ctx.fillStyle="#ff9800";
+  enemies.forEach(e=>{
+    ctx.beginPath();
+    ctx.arc(e.x,e.y,8,0,Math.PI*2);
+    ctx.fill();
+  });
+
   // boss
   ctx.fillStyle="#b71c1c";
   ctx.beginPath();
-  ctx.arc(boss.x,boss.y,boss.radius,0,Math.PI*2);
+  ctx.arc(boss.x,boss.y,32,0,Math.PI*2);
   ctx.fill();
 
-  // boss bullets
+  // boss tiros
   ctx.fillStyle="#ff5252";
   boss.bullets.forEach(b=>{
     ctx.beginPath();
     ctx.arc(b.x,b.y,5,0,Math.PI*2);
     ctx.fill();
   });
-
-  // boss life bar
-  ctx.fillStyle="#fff";
-  ctx.fillRect(boss.x-40,boss.y-50,80,6);
-  ctx.fillStyle="#e53935";
-  ctx.fillRect(
-    boss.x-40,boss.y-50,
-    80*(boss.life/boss.maxLife),6
-  );
 }
-</script>
 
+/* ==================== LOOP ==================== */
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+loop();
+
+/* ==================== FLOW ==================== */
+
+function startGame() {
+  score = 0;
+  phase = 1;
+  enemies.length = 0;
+  player.bullets.length = 0;
+  resetBoss();
+  state = "play";
+  menu.style.display = "none";
+}
+
+function nextPhase() {
+  phase++;
+  enemies.length = 0;
+  resetBoss();
+}
+
+function gameOver() {
+  state = "menu";
+  menu.style.display = "flex";
+}
+
+document.getElementById("startBtn").onclick = startGame;
+</script>
 </body>
 </html>
