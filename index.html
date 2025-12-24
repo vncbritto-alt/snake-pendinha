@@ -126,7 +126,7 @@ const CONFIG = {
     }
   },
   powerUpDuration: 600,
-  allyDuration: 1800, // 30 segundos a 60 FPS
+  allyDuration: 1800 // 30 segundos a ~60 FPS
 };
 
 // ================ ESTADO GLOBAL ================
@@ -137,7 +137,7 @@ let lives = 3;
 let currentWeapon = 'basic';
 let weaponTimer = 0;
 let ally = null;
-let currentShip = 'fighter'; // Nave padrão inicial
+let currentShip = 'fighter'; // Nave padrão
 
 // ================ CANVAS E INPUT ================
 const canvas = document.getElementById('game');
@@ -355,6 +355,16 @@ const shooterEnemies = [];
 
 let shake = 0;
 let bgOffset = 0;
+let stars = [];
+
+for (let i = 0; i < 80; i++) {
+  stars.push({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height,
+    size: Math.random() * 2 + 1,
+    speed: Math.random() * 0.5 + 0.2
+  });
+}
 
 const bgColors = [
   ["#0b1d13","#1b5e20"], ["#102027","#263238"], ["#1a237e","#0d47a1"],
@@ -393,6 +403,12 @@ function update() {
   boss.update();
 
   if (shake > 0) shake = Math.max(0, shake - 0.6);
+
+  // Atualiza estrelas do fundo
+  stars.forEach(s => {
+    s.y += s.speed + phase * 0.05;
+    if (s.y > canvas.height) s.y = 0;
+  });
 
   if (Math.random() < 0.018 + phase * 0.004) {
     enemies.push({
@@ -469,7 +485,10 @@ function update() {
       player.bullets.push({ x: ally.x, y: ally.y, vx: 0, vy: -9, r: 3, damage: 6 });
       ally.shootTimer = 16;
     }
-    if (ally.timer <= 0) ally = null;
+    if (ally.timer <= 0) {
+      spawnParticles(ally.x, ally.y, '#00ff80', 20);
+      ally = null;
+    }
   }
 }
 
@@ -521,7 +540,8 @@ function checkCollisions() {
           score += e.size > 15 ? 60 : 30;
           updateUI();
           spawnParticles(e.x, e.y, '#ff5722', 20);
-          allEnemies.splice(ei, 1);
+          const index = allEnemies.indexOf(e);
+          if (index > -1) allEnemies.splice(index, 1);
           if (enemies.includes(e)) enemies.splice(enemies.indexOf(e), 1);
           else shooterEnemies.splice(shooterEnemies.indexOf(e), 1);
           if (Math.random() < 0.3) spawnPowerUp(e.x, e.y);
@@ -551,7 +571,6 @@ function checkCollisions() {
 
 // ================ RENDER ================
 function drawBackground() {
-  bgOffset += 0.6 + phase * 0.08;
   const colors = bgColors[(phase - 1) % bgColors.length];
   const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
   grad.addColorStop(0, colors[0]);
@@ -559,12 +578,23 @@ function drawBackground() {
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  ctx.fillStyle = 'rgba(255,255,255,0.06)';
-  for (let i = 0; i < 18; i++) {
-    const x = (i * 50 + bgOffset) % canvas.width;
-    const y = (i * 80 + bgOffset * 0.5) % canvas.height;
+  // Estrelas animadas
+  ctx.fillStyle = '#ffffff';
+  stars.forEach(s => {
+    ctx.globalAlpha = Math.sin(performance.now() * 0.001 + s.x) * 0.3 + 0.7;
     ctx.beginPath();
-    ctx.arc(x, y, 18, 0, Math.PI * 2);
+    ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+
+  // Partículas de fundo (nebulosa leve)
+  ctx.fillStyle = 'rgba(255,255,255,0.03)';
+  for (let i = 0; i < 15; i++) {
+    const x = (i * 60 + bgOffset * 0.5) % canvas.width;
+    const y = (i * 100 + bgOffset * 0.3) % canvas.height;
+    ctx.beginPath();
+    ctx.arc(x, y, 30, 0, Math.PI * 2);
     ctx.fill();
   }
 }
@@ -669,6 +699,7 @@ function render() {
 }
 
 function loop() {
+  bgOffset += 0.3;
   update();
   render();
   requestAnimationFrame(loop);
@@ -694,6 +725,7 @@ function gameOver() {
 function showShipSelection() {
   document.getElementById('menu').style.display = 'none';
   document.getElementById('shipSelection').style.display = 'flex';
+  document.getElementById('gameOverScreen').style.display = 'none';
 }
 
 function startGame() {
@@ -729,26 +761,17 @@ document.getElementById('fullScreenBtn').onclick = () => {
   else document.exitFullscreen();
 };
 
-// Nave selection
+// Seleção de naves
 document.getElementById('selectShipBtn').onclick = showShipSelection;
-document.getElementById('fighterBtn').onclick = () => {
-  currentShip = 'fighter';
-  startGame();
-};
-document.getElementById('mothershipBtn').onclick = () => {
-  currentShip = 'mothership';
-  startGame();
-};
-document.getElementById('scoutBtn').onclick = () => {
-  currentShip = 'scout';
-  startGame();
-};
+document.getElementById('fighterBtn').onclick = () => { currentShip = 'fighter'; startGame(); };
+document.getElementById('mothershipBtn').onclick = () => { currentShip = 'mothership'; startGame(); };
+document.getElementById('scoutBtn').onclick = () => { currentShip = 'scout'; startGame(); };
+
+// Reiniciar do Game Over leva à seleção de naves
+document.getElementById('restartBtn').onclick = showShipSelection;
 
 // Utilitário
 Math.clamp = (n, min, max) => Math.max(min, Math.min(max, n));
-
-// Inicialização
-document.getElementById('restartBtn').onclick = showShipSelection;
 
 updateUI();
 updateLives();
