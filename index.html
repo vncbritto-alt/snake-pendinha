@@ -76,10 +76,11 @@ const CONFIG = {
   player: { size: 16, speed: 0.18 },
   weapons: {
     basic: { name: "Básica", cooldown: 12, bullet: { vy: -7, r: 3, damage: 5 } },
-    double: { name: "Dupla", cooldown: 14, offset: 10 },
-    spread: { name: "Espalhada", cooldown: 16, angles: [-0.35, 0, 0.35] },
-    rapid: { name: "Rápida", cooldown: 6, bullet: { vy: -10, r: 2, damage: 5 } },
-    laser: { name: "Laser", cooldown: 10, bullet: { vy: -14, r: 2, laser: true, damage: 8 } }
+    double: { name: "Dupla", cooldown: 14, damage: 8 },
+    spread: { name: "Espalhada", cooldown: 16, damage: 7 },
+    rapid: { name: "Rápida", cooldown: 6, bullet: { vy: -10, r: 2, damage: 6 } },
+    laser: { name: "Laser", cooldown: 10, bullet: { vy: -14, r: 2, laser: true, damage: 12 } },
+    missile: { name: "Míssil", cooldown: 20, bullet: { vy: -5, r: 5, damage: 15, homing: true } }
   },
   powerUpDuration: 600,
   allyDuration: 1200,
@@ -142,6 +143,19 @@ class Player {
 
     for (let i = this.bullets.length - 1; i >= 0; i--) {
       const b = this.bullets[i];
+      if (b.homing) {
+        // Busca alvo mais próximo (boss > inimigos)
+        let target = { x: boss.x, y: boss.y, dist: Math.hypot(b.x - boss.x, b.y - boss.y) };
+        [...enemies, ...shooterEnemies].forEach(e => {
+          const d = Math.hypot(b.x - e.x, b.y - e.y);
+          if (d < target.dist) target = { x: e.x, y: e.y, dist: d };
+        });
+        if (target.dist < 300) {
+          const angle = Math.atan2(target.y - b.y, target.x - b.x);
+          b.vx = Math.cos(angle) * 5;
+          b.vy = Math.sin(angle) * 5;
+        }
+      }
       b.x += b.vx || 0;
       b.y += b.vy;
       if (b.y < -50 || b.x < -50 || b.x > canvas.width + 50) {
@@ -151,23 +165,29 @@ class Player {
   }
   shoot() {
     const w = CONFIG.weapons[currentWeapon];
+    const baseDamage = w.damage || w.bullet?.damage || 5;
     if (currentWeapon === 'double') {
       this.bullets.push(
-        { x: this.x - w.offset, y: this.y - 10, vx: 0, vy: -7, r: 3, damage: 5 },
-        { x: this.x + w.offset, y: this.y - 10, vx: 0, vy: -7, r: 3, damage: 5 }
+        { x: this.x - 12, y: this.y - 10, vx: 0, vy: -8, r: 4, damage: baseDamage },
+        { x: this.x + 12, y: this.y - 10, vx: 0, vy: -8, r: 4, damage: baseDamage }
       );
     } else if (currentWeapon === 'spread') {
-      w.angles.forEach(a => {
-        const speed = 6;
+      [-0.4, 0, 0.4].forEach(a => {
+        const speed = 7;
         this.bullets.push({
           x: this.x, y: this.y - 10,
           vx: Math.cos(-Math.PI/2 + a) * speed,
           vy: Math.sin(-Math.PI/2 + a) * speed,
-          r: 3, damage: 5
+          r: 3, damage: baseDamage
         });
       });
+    } else if (currentWeapon === 'missile') {
+      this.bullets.push({
+        x: this.x, y: this.y - 12, vx: 0, vy: w.bullet.vy, r: w.bullet.r,
+        damage: baseDamage, homing: true
+      });
     } else {
-      const bullet = { x: this.x, y: this.y - 12, vx: 0, ...w.bullet };
+      const bullet = { x: this.x, y: this.y - 12, vx: 0, ...w.bullet, damage: baseDamage };
       this.bullets.push(bullet);
     }
   }
@@ -287,10 +307,10 @@ function triggerShake(amount = 8) {
 }
 
 function spawnPowerUp(x, y) {
-  const types = ['double', 'spread', 'rapid', 'laser'];
+  const types = ['double', 'spread', 'rapid', 'laser', 'missile'];
   let type = types[Math.floor(Math.random() * types.length)];
-  if (Math.random() < 0.1 && lives < CONFIG.maxLives) type = 'life';
-  if (Math.random() < 0.08) type = 'ally';
+  if (Math.random() < 0.12 && lives < CONFIG.maxLives) type = 'life';
+  if (Math.random() < 0.10) type = 'ally';
   powerUps.push({ x, y, type, vy: 1.4, r: 14 });
 }
 
@@ -301,11 +321,9 @@ function update() {
   player.update();
   boss.update();
 
-  // Shake decay
   if (shake > 0) shake = Math.max(0, shake - 0.6);
 
-  // Spawn inimigos simples
-  if (Math.random() < 0.015 + phase * 0.003) {
+  if (Math.random() < 0.018 + phase * 0.004) {
     enemies.push({
       x: Math.random() * (canvas.width - 40) + 20,
       y: -30,
@@ -315,8 +333,7 @@ function update() {
     });
   }
 
-  // Spawn inimigos atiradores
-  if (Math.random() < 0.005 + phase * 0.001) {
+  if (Math.random() < 0.006 + phase * 0.0015) {
     shooterEnemies.push({
       x: Math.random() * (canvas.width - 40) + 20,
       y: -40,
@@ -327,14 +344,12 @@ function update() {
     });
   }
 
-  // Update inimigos simples
   for (let i = enemies.length - 1; i >= 0; i--) {
     const e = enemies[i];
     e.y += e.vy;
     if (e.y > canvas.height + 40) enemies.splice(i, 1);
   }
 
-  // Update inimigos atiradores
   for (let i = shooterEnemies.length - 1; i >= 0; i--) {
     const se = shooterEnemies[i];
     se.y += se.vy;
@@ -348,20 +363,18 @@ function update() {
     if (se.y > canvas.height + 40) shooterEnemies.splice(i, 1);
   }
 
-  // Power-ups
   for (let i = powerUps.length - 1; i >= 0; i--) {
     const p = powerUps[i];
     p.y += p.vy;
     if (Math.hypot(p.x - player.x, p.y - player.y) < CONFIG.player.size + p.r) {
       applyPowerUp(p.type);
-      spawnParticles(p.x, p.y, '#00ff80', 30);
+      spawnParticles(p.x, p.y, '#00ff80', 35);
       powerUps.splice(i, 1);
     } else if (p.y > canvas.height + 30) {
       powerUps.splice(i, 1);
     }
   }
 
-  // Partículas
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
     p.x += p.vx;
@@ -370,23 +383,20 @@ function update() {
     if (p.life <= 0) particles.splice(i, 1);
   }
 
-  // Colisões
   checkCollisions();
 
-  // Timer de arma temporária
   if (weaponTimer > 0 && --weaponTimer === 0) {
     currentWeapon = 'basic';
     document.getElementById('currentWeapon').textContent = 'Arma: Básica';
   }
 
-  // Ally
   if (ally) {
     ally.timer--;
     ally.x += (player.x + ally.offset - ally.x) * 0.12;
     ally.y += (player.y - 50 - ally.y) * 0.1;
     if (ally.shootTimer-- <= 0) {
-      player.bullets.push({ x: ally.x, y: ally.y, vx: 0, vy: -9, r: 3, damage: 5 });
-      ally.shootTimer = 18;
+      player.bullets.push({ x: ally.x, y: ally.y, vx: 0, vy: -9, r: 3, damage: 6 });
+      ally.shootTimer = 16;
     }
     if (ally.timer <= 0) ally = null;
   }
@@ -405,78 +415,64 @@ function applyPowerUp(type) {
   }
 }
 
+// ================ COLISÕES ================
 function checkCollisions() {
-  // Tiros do player no boss
+  // Player bullets → boss
   for (let i = player.bullets.length - 1; i >= 0; i--) {
     const b = player.bullets[i];
     if (Math.hypot(b.x - boss.x, b.y - boss.y) < boss.radius + (b.r || 3)) {
       boss.life -= b.damage || 5;
       player.bullets.splice(i, 1);
-      spawnParticles(boss.x, boss.y, '#ff5722', 12);
-      triggerShake(6);
+      spawnParticles(boss.x, boss.y, '#ff5722', 15);
+      triggerShake(8);
       if (boss.life <= 0) {
-        score += 800 + phase * 200;
+        score += 1000 + phase * 300;
         phase++;
         updateUI();
         boss.reset();
-        triggerShake(16);
-        spawnParticles(boss.x, boss.y, '#ffeb3b', 60);
-        spawnPowerUp(boss.x, boss.y);
+        triggerShake(20);
+        spawnParticles(boss.x, boss.y, '#ffeb3b', 80);
+        spawnPowerUp(boss.x - 30, boss.y);
+        spawnPowerUp(boss.x + 30, boss.y);
       }
     }
   }
 
-  // Tiros do player em inimigos
-  for (let i = enemies.length - 1; i >= 0; i--) {
-    const e = enemies[i];
-    for (let j = player.bullets.length - 1; j >= 0; j--) {
-      const b = player.bullets[j];
+  // Player bullets → enemies & shooters
+  const allEnemies = [...enemies, ...shooterEnemies];
+  for (let ei = allEnemies.length - 1; ei >= 0; ei--) {
+    const e = allEnemies[ei];
+    for (let bi = player.bullets.length - 1; bi >= 0; bi--) {
+      const b = player.bullets[bi];
       if (Math.hypot(b.x - e.x, b.y - e.y) < e.size + (b.r || 3)) {
         e.life -= b.damage || 5;
-        player.bullets.splice(j, 1);
+        player.bullets.splice(bi, 1);
+        spawnParticles(e.x, e.y, '#ff9800', 10);
         if (e.life <= 0) {
-          score += e.size > 15 ? 50 : 20;
+          score += e.size > 15 ? 60 : 30;
           updateUI();
-          spawnParticles(e.x, e.y, '#ff9800', 15);
-          enemies.splice(i, 1);
-          if (Math.random() < 0.25) spawnPowerUp(e.x, e.y);
+          spawnParticles(e.x, e.y, '#ff5722', 20);
+          allEnemies.splice(ei, 1);
+          if (enemies.includes(e)) enemies.splice(enemies.indexOf(e), 1);
+          else shooterEnemies.splice(shooterEnemies.indexOf(e), 1);
+          if (Math.random() < 0.3) spawnPowerUp(e.x, e.y);
           break;
         }
       }
     }
   }
 
-  // Tiros do player em atiradores
-  for (let i = shooterEnemies.length - 1; i >= 0; i--) {
-    const se = shooterEnemies[i];
-    for (let j = player.bullets.length - 1; j >= 0; j--) {
-      const b = player.bullets[j];
-      if (Math.hypot(b.x - se.x, b.y - se.y) < se.size + (b.r || 3)) {
-        se.life -= b.damage || 5;
-        player.bullets.splice(j, 1);
-        if (se.life <= 0) {
-          score += 80;
-          updateUI();
-          spawnParticles(se.x, se.y, '#ff5722', 20);
-          shooterEnemies.splice(i, 1);
-          if (Math.random() < 0.35) spawnPowerUp(se.x, se.y);
-          break;
-        }
-      }
-    }
-  }
-
-  // Colisão com player (tiros do boss e inimigos)
-  const allEnemyBulletsAndEntities = [...boss.bullets, ...enemies, ...shooterEnemies];
-  for (let i = allEnemyBulletsAndEntities.length - 1; i >= 0; i--) {
-    const obj = allEnemyBulletsAndEntities[i];
-    const radius = obj.r || obj.size;
-    if (Math.hypot(obj.x - player.x, obj.y - player.y) < radius + CONFIG.player.size) {
+  // Enemy bullets & enemies → player
+  const threats = [...boss.bullets, ...enemies, ...shooterEnemies];
+  for (let i = threats.length - 1; i >= 0; i--) {
+    const obj = threats[i];
+    const radius = obj.r || obj.size || 0;
+    if (radius > 0 && Math.hypot(obj.x - player.x, obj.y - player.y) < radius + CONFIG.player.size) {
       lives--;
       updateLives();
-      triggerShake(12);
-      spawnParticles(player.x, player.y, '#ff1744', 40);
-      if (obj.r) boss.bullets = boss.bullets.filter(b => b !== obj); // remove tiro
+      triggerShake(14);
+      spawnParticles(player.x, player.y, '#ff1744', 50);
+      if (obj.r) boss.bullets.splice(boss.bullets.indexOf(obj), 1);
       if (lives <= 0) {
         gameOver();
         return;
@@ -517,7 +513,6 @@ function render() {
   }
 
   if (gameState === 'playing') {
-    // Boss
     boss.draw();
     boss.bullets.forEach(b => {
       ctx.fillStyle = '#ff5252';
@@ -526,7 +521,6 @@ function render() {
       ctx.fill();
     });
 
-    // Inimigos simples
     enemies.forEach(e => {
       ctx.fillStyle = e.size > 15 ? '#ff5722' : '#ff9800';
       ctx.beginPath();
@@ -537,7 +531,6 @@ function render() {
       ctx.fill();
     });
 
-    // Inimigos atiradores
     shooterEnemies.forEach(se => {
       ctx.fillStyle = '#795548';
       ctx.beginPath();
@@ -548,9 +541,11 @@ function render() {
       ctx.fill();
     });
 
-    // Power-ups
     powerUps.forEach(p => {
-      const colors = { double: '#ffeb3b', spread: '#e91e63', rapid: '#00bcd4', laser: '#00ff80', life: '#f44336', ally: '#8bc34a' };
+      const colors = {
+        double: '#ffeb3b', spread: '#e91e63', rapid: '#00bcd4',
+        laser: '#00ff80', missile: '#ff5722', life: '#f44336', ally: '#8bc34a'
+      };
       ctx.fillStyle = colors[p.type] || '#fff';
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
@@ -560,7 +555,6 @@ function render() {
       ctx.stroke();
     });
 
-    // Ally
     if (ally) {
       ctx.fillStyle = '#00ff80';
       ctx.beginPath();
@@ -569,20 +563,33 @@ function render() {
       ctx.lineTo(ally.x + 10, ally.y + 10);
       ctx.closePath();
       ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(ally.x, ally.y - 2, 3, 0, Math.PI * 2);
+      ctx.fill();
     }
 
-    // Tiros do player
     player.bullets.forEach(b => {
-      ctx.fillStyle = b.laser ? '#00ff80' : '#00e5ff';
-      ctx.beginPath();
-      ctx.arc(b.x, b.y, b.r || 3, 0, Math.PI * 2);
-      ctx.fill();
+      if (b.homing) {
+        ctx.fillStyle = '#ff5722';
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ff1744';
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r - 2, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillStyle = b.laser ? '#00ff80' : '#00e5ff';
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r || 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
     });
 
-    // Player
     player.draw();
 
-    // Partículas
     particles.forEach(p => {
       ctx.globalAlpha = p.life / 50;
       ctx.fillStyle = p.color;
@@ -600,7 +607,7 @@ function loop() {
   requestAnimationFrame(loop);
 }
 
-// ================ UI E CONTROLES ================
+// ================ UI ================
 function updateUI() {
   document.getElementById('score').textContent = score;
   document.getElementById('phase').textContent = phase;
@@ -652,10 +659,8 @@ document.getElementById('fullScreenBtn').onclick = () => {
   else document.exitFullscreen();
 };
 
-// Utilitário
 Math.clamp = (n, min, max) => Math.max(min, Math.min(max, n));
 
-// Inicialização
 document.getElementById('startBtn').onclick = startGame;
 document.getElementById('restartBtn').onclick = startGame;
 
