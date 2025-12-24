@@ -325,7 +325,7 @@ function drawBossBullets() {
   });
 }
 
-// Inimigos
+// Inimigos, power-ups, partículas
 const enemies = [];
 const shooterEnemies = [];
 const powerUps = [];
@@ -364,7 +364,7 @@ function spawnShooterEnemy() {
 function spawnPowerUp(x, y) {
   let type;
   if (Math.random() < 0.05 && lives < 3) {
-    type = WEAPONS.LIFE; // power-up de vida extra (raro)
+    type = WEAPONS.LIFE;
   } else {
     const list = [WEAPONS.DOUBLE, WEAPONS.SPREAD, WEAPONS.RAPID, WEAPONS.LASER];
     type = list[Math.floor(Math.random() * list.length)];
