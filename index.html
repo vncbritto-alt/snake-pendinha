@@ -15,6 +15,7 @@ html, body {
 canvas { width: 100%; display: block; background: #000; }
 #ui { position: absolute; top: 10px; left: 10px; z-index: 10; font-size: 14px; pointer-events: none; }
 #lives { position: absolute; top: 10px; right: 10px; z-index: 10; font-size: 24px; }
+#currentWeapon { position: absolute; top: 70px; left: 10px; z-index: 10; font-size: 14px; color: #00e5ff; }
 #menu, #gameOverScreen {
   position: absolute; inset: 0; background: rgba(0,0,0,0.9);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -39,8 +40,8 @@ canvas { width: 100%; display: block; background: #000; }
     Fase: <span id="phase">1</span><br>
     Score: <span id="score">0</span>
   </div>
-
   <div id="lives">❤️❤️❤️</div>
+  <div id="currentWeapon">Arma: Básica</div>
 
   <div id="menu">
     <h1>👾 Pendinha Boss Shooter</h1>
@@ -67,7 +68,7 @@ let gameState = STATE.MENU;
 
 let score = 0;
 let phase = 1;
-let lives = 3; // NOVO: sistema de vidas
+let lives = 3;
 
 // Input
 const input = { x: W/2, y: H-80, down: false };
@@ -110,9 +111,17 @@ function drawBackground() {
 
 // Player
 const player = { x: W/2, y: H-60, size: 16, speed: 0.15, cooldown: 0, bullets: [] };
-const WEAPONS = { BASIC: "basic", DOUBLE: "double", SPREAD: "spread", RAPID: "rapid", LASER: "laser" };
+const WEAPONS = { BASIC: "basic", DOUBLE: "double", SPREAD: "spread", RAPID: "rapid", LASER: "laser", LIFE: "life" };
 let currentWeapon = WEAPONS.BASIC;
 let weaponTimer = 0;
+
+const weaponNames = {
+  basic: "Básica",
+  double: "Dupla",
+  spread: "Espalhada",
+  rapid: "Rápida",
+  laser: "Laser"
+};
 
 function shootPlayer() {
   if (currentWeapon === WEAPONS.BASIC || currentWeapon === WEAPONS.RAPID) {
@@ -169,7 +178,10 @@ function updatePlayer() {
 
   if (weaponTimer > 0) {
     weaponTimer--;
-    if (weaponTimer === 0) currentWeapon = WEAPONS.BASIC;
+    if (weaponTimer === 0) {
+      currentWeapon = WEAPONS.BASIC;
+      document.getElementById("currentWeapon").textContent = "Arma: Básica";
+    }
   }
 }
 
@@ -228,17 +240,13 @@ function takeDamage() {
   document.getElementById("lives").textContent = "❤️".repeat(lives);
   triggerShake(12, 15);
   spawnParticles(player.x, player.y, "#ff1744", 30);
-
-  if (lives <= 0) {
-    gameOver();
-  }
+  if (lives <= 0) gameOver();
 }
 
 function updateBoss() {
   if (gameState !== STATE.PLAYING) return;
 
-  const baseDelay = 90;
-  const shootDelay = Math.max(baseDelay - (phase - 1) * 8, 30);
+  const shootDelay = Math.max(90 - (phase - 1) * 8, 30);
   boss.shootTimer++;
   if (boss.shootTimer > shootDelay) {
     boss.shootTimer = 0;
@@ -255,14 +263,12 @@ function updateBoss() {
       continue;
     }
 
-    // Colisão com player → perde vida
     if (Math.hypot(player.x - b.x, player.y - b.y) < player.size + b.r) {
       takeDamage();
-      boss.bullets.splice(i, 1); // remove bala ao acertar
+      boss.bullets.splice(i, 1);
       continue;
     }
 
-    // Tiros do player destroem balas do boss
     for (let j = player.bullets.length - 1; j >= 0; j--) {
       const p = player.bullets[j];
       if (Math.hypot(p.x - b.x, p.y - b.y) < b.r + (p.r || 3)) {
@@ -281,7 +287,6 @@ function updateBoss() {
     }
   }
 
-  // Player atira no boss
   for (let i = player.bullets.length - 1; i >= 0; i--) {
     const p = player.bullets[i];
     if (Math.hypot(p.x - boss.x, p.y - boss.y) < boss.radius + (p.r || 3)) {
@@ -303,7 +308,6 @@ function updateBoss() {
 function drawBoss() {
   ctx.fillStyle = "#b71c1c";
   ctx.beginPath(); ctx.arc(boss.x, boss.y, boss.radius, 0, Math.PI * 2); ctx.fill();
-
   ctx.fillStyle = "#ff5252";
   ctx.beginPath(); ctx.arc(boss.x, boss.y, 10, 0, Math.PI * 2); ctx.fill();
 
@@ -321,30 +325,107 @@ function drawBossBullets() {
   });
 }
 
-// Inimigos, power-ups, partículas...
-const enemies = [], shooterEnemies = [], powerUps = [], particles = [];
-let enemySpawnTimer = 0, shooterSpawnTimer = 0;
+// Inimigos
+const enemies = [];
+const shooterEnemies = [];
+const powerUps = [];
+const particles = [];
+let enemySpawnTimer = 0;
+let shooterSpawnTimer = 0;
 let shake = { t: 0, s: 0 };
 
-function spawnEnemy() { /* mesmo código anterior */ }
-function spawnShooterEnemy() { /* mesmo código anterior */ }
-function spawnPowerUp(x, y) { /* mesmo código anterior */ }
+function spawnEnemy() {
+  const difficulty = 1 + (phase - 1) * 0.1;
+  const isMedium = Math.random() < 0.2 + (phase - 1) * 0.03;
+  enemies.push({
+    x: Math.random() * (W - 60) + 30,
+    y: -30,
+    vx: (Math.random() - 0.5) * 1.2 * difficulty,
+    vy: (isMedium ? 1.1 : 1.6) * difficulty,
+    size: isMedium ? 18 : 12,
+    life: isMedium ? 3 : 1,
+    score: isMedium ? 40 : 15
+  });
+}
+
+function spawnShooterEnemy() {
+  const difficulty = 1 + (phase - 1) * 0.1;
+  shooterEnemies.push({
+    x: Math.random() * (W - 60) + 30,
+    y: -40,
+    size: 20,
+    life: 4,
+    vy: 1.1 * difficulty,
+    shootTimer: 0,
+    bullets: []
+  });
+}
+
+function spawnPowerUp(x, y) {
+  let type;
+  if (Math.random() < 0.05 && lives < 3) {
+    type = WEAPONS.LIFE; // power-up de vida extra (raro)
+  } else {
+    const list = [WEAPONS.DOUBLE, WEAPONS.SPREAD, WEAPONS.RAPID, WEAPONS.LASER];
+    type = list[Math.floor(Math.random() * list.length)];
+  }
+  powerUps.push({ x, y, type, r: 12, vy: 1.2 });
+}
+
 function spawnParticles(x, y, color, n = 16) {
   for (let i = 0; i < n; i++) {
-    particles.push({ x, y, vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4, life: 30, c: color });
+    particles.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 4,
+      vy: (Math.random() - 0.5) * 4,
+      life: 30,
+      c: color
+    });
   }
 }
-function triggerShake(s=6,t=10){ shake.s=s; shake.t=t; }
-function applyShake(){ if(shake.t>0){ shake.t--; ctx.translate((Math.random()-0.5)*shake.s,(Math.random()-0.5)*shake.s); } }
 
-function updatePowerUps() { /* mesmo código anterior */ }
-function updateParticles() { /* mesmo código anterior */ }
+function triggerShake(s = 6, t = 10) { shake.s = s; shake.t = t; }
+function applyShake() {
+  if (shake.t > 0) {
+    shake.t--;
+    ctx.translate((Math.random() - 0.5) * shake.s, (Math.random() - 0.5) * shake.s);
+  }
+}
+
+function updatePowerUps() {
+  for (let i = powerUps.length - 1; i >= 0; i--) {
+    const p = powerUps[i];
+    p.y += p.vy;
+    if (p.y > H + 20) {
+      powerUps.splice(i, 1);
+      continue;
+    }
+    if (Math.hypot(player.x - p.x, player.y - p.y) < player.size + p.r) {
+      if (p.type === WEAPONS.LIFE) {
+        lives = Math.min(lives + 1, 3);
+        document.getElementById("lives").textContent = "❤️".repeat(lives);
+        spawnParticles(p.x, p.y, "#00ff00", 20);
+      } else {
+        currentWeapon = p.type;
+        weaponTimer = 600;
+        document.getElementById("currentWeapon").textContent = "Arma: " + weaponNames[p.type];
+      }
+      powerUps.splice(i, 1);
+    }
+  }
+}
+
+function updateParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.life--;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
 
 function updateEnemiesAndShooters() {
-  // Spawn inimigos
   enemySpawnTimer++;
-  const baseSpawnRate = 80;
-  const spawnRate = Math.max(baseSpawnRate - (phase - 1) * 6, 25);
+  const spawnRate = Math.max(80 - (phase - 1) * 6, 25);
   if (enemySpawnTimer > spawnRate) {
     enemySpawnTimer = 0;
     spawnEnemy();
@@ -352,17 +433,20 @@ function updateEnemiesAndShooters() {
 
   for (let i = enemies.length - 1; i >= 0; i--) {
     const e = enemies[i];
-    e.x += e.vx; e.y += e.vy;
-    if (e.y > H + 40) { enemies.splice(i, 1); continue; }
+    e.x += e.vx;
+    e.y += e.vy;
 
-    // Colisão com player → perde vida
+    if (e.y > H + 40) {
+      enemies.splice(i, 1);
+      continue;
+    }
+
     if (Math.hypot(player.x - e.x, player.y - e.y) < player.size + e.size) {
       takeDamage();
       enemies.splice(i, 1);
       continue;
     }
 
-    // Tiros acertam inimigo
     for (let j = player.bullets.length - 1; j >= 0; j--) {
       const b = player.bullets[j];
       if (Math.hypot(b.x - e.x, b.y - e.y) < e.size + (b.r || 3)) {
@@ -371,7 +455,7 @@ function updateEnemiesAndShooters() {
         if (e.life <= 0) {
           score += e.score;
           updateUI();
-          if (Math.random() < 0.12 + (phase - 1) * 0.01) spawnPowerUp(e.x, e.y);
+          if (Math.random() < 0.15) spawnPowerUp(e.x, e.y);
           enemies.splice(i, 1);
         }
         break;
@@ -379,7 +463,6 @@ function updateEnemiesAndShooters() {
     }
   }
 
-  // Shooters (mesmo lógica, mas com takeDamage ao acertar player)
   if (phase >= 3) {
     shooterSpawnTimer++;
     const shooterRate = Math.max(300 - (phase - 1) * 20, 100);
@@ -393,14 +476,17 @@ function updateEnemiesAndShooters() {
     const e = shooterEnemies[i];
     e.y += e.vy;
     e.shootTimer++;
-    if (e.y > H + 50) { shooterEnemies.splice(i, 1); continue; }
+
+    if (e.y > H + 50) {
+      shooterEnemies.splice(i, 1);
+      continue;
+    }
 
     if (e.shootTimer > 70 - (phase - 1) * 3) {
       e.shootTimer = 0;
       e.bullets.push({ x: e.x, y: e.y, angle: Math.PI / 2, speed: 2.6 + (phase - 1) * 0.1, r: 4, hp: 2 });
     }
 
-    // Balas dos shooters
     for (let j = e.bullets.length - 1; j >= 0; j--) {
       const b = e.bullets[j];
       b.x += Math.cos(b.angle) * b.speed;
@@ -411,10 +497,8 @@ function updateEnemiesAndShooters() {
         e.bullets.splice(j, 1);
         continue;
       }
-
       if (b.y > H + 30) e.bullets.splice(j, 1);
 
-      // Player destrói balas dos shooters
       for (let k = player.bullets.length - 1; k >= 0; k--) {
         const p = player.bullets[k];
         if (Math.hypot(p.x - b.x, p.y - b.y) < b.r + (p.r || 3)) {
@@ -431,7 +515,6 @@ function updateEnemiesAndShooters() {
       }
     }
 
-    // Player atira no shooter
     for (let j = player.bullets.length - 1; j >= 0; j--) {
       const b = player.bullets[j];
       if (Math.hypot(b.x - e.x, b.y - e.y) < e.size + (b.r || 3)) {
@@ -440,7 +523,7 @@ function updateEnemiesAndShooters() {
         if (e.life <= 0) {
           score += 80;
           updateUI();
-          if (Math.random() < 0.25) spawnPowerUp(e.x, e.y);
+          if (Math.random() < 0.3) spawnPowerUp(e.x, e.y);
           shooterEnemies.splice(i, 1);
         }
         break;
@@ -449,11 +532,71 @@ function updateEnemiesAndShooters() {
   }
 }
 
-// Desenhos (mesmo do anterior)
-function drawEnemies() { /* mesmo código anterior */ }
-function drawShooterEnemies() { /* mesmo código anterior */ }
-function drawPowerUps() { /* mesmo código anterior */ }
-function drawParticles() { /* mesmo código anterior */ }
+function drawEnemies() {
+  enemies.forEach(e => {
+    ctx.fillStyle = e.life === 1 ? "#ffeb3b" : "#ff9800";
+    ctx.beginPath();
+    ctx.moveTo(e.x, e.y - e.size);
+    ctx.lineTo(e.x - e.size, e.y + e.size);
+    ctx.lineTo(e.x + e.size, e.y + e.size);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.arc(e.x, e.y + 3, 3, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+function drawShooterEnemies() {
+  shooterEnemies.forEach(e => {
+    ctx.fillStyle = "#f44336";
+    ctx.fillRect(e.x - 12, e.y - 12, 24, 24);
+
+    ctx.fillStyle = "#ffcdd2";
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "#ff5252";
+    e.bullets.forEach(b => {
+      ctx.fillStyle = b.hp === 1 ? "#ff8a65" : "#ff5252";
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  });
+}
+
+function drawPowerUps() {
+  powerUps.forEach(p => {
+    if (p.type === WEAPONS.LIFE) {
+      ctx.fillStyle = "#ff1744";
+      ctx.font = "20px Arial";
+      ctx.fillText("❤️", p.x - 10, p.y + 8);
+    } else {
+      ctx.fillStyle = "#00e676";
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#000";
+      ctx.font = "10px Arial";
+      ctx.fillText(p.type[0].toUpperCase(), p.x - 5, p.y + 4);
+    }
+  });
+}
+
+function drawParticles() {
+  particles.forEach(p => {
+    ctx.globalAlpha = p.life / 30;
+    ctx.fillStyle = p.c;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
 
 // UI
 function updateUI() {
@@ -473,7 +616,7 @@ function drawAnimatedUI() {
   ctx.fillText("Fase: "+phase,0,0); ctx.restore();
 }
 
-// Game Over
+// Game Over e Start
 function gameOver() {
   gameState = STATE.GAMEOVER;
   document.getElementById("finalScore").textContent = score;
@@ -488,6 +631,7 @@ function startGame() {
   powerUps.length = 0; particles.length = 0;
   enemySpawnTimer = 0; shooterSpawnTimer = 0;
   weaponTimer = 0; currentWeapon = WEAPONS.BASIC;
+  document.getElementById("currentWeapon").textContent = "Arma: Básica";
   resetBoss();
   updateUI();
   gameState = STATE.PLAYING;
