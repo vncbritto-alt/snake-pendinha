@@ -26,22 +26,23 @@
     color: #000; border: none; border-radius: 8px; font-size: 14px; cursor: pointer;
     pointer-events: auto;
   }
-  #menu, #gameOverScreen {
+  #menu, #gameOverScreen, #shipSelection {
     position: absolute; inset: 0; background: rgba(0,0,0,0.94);
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     z-index: 20; text-align: center;
   }
   #menu { display: flex; }
-  #gameOverScreen { display: none; }
-  #menu h1 { font-size: 36px; margin-bottom: 10px; }
-  #menu p { margin: 10px 0; opacity: 0.9; }
+  #gameOverScreen, #shipSelection { display: none; }
+  #menu h1, #shipSelection h1 { font-size: 36px; margin-bottom: 10px; }
+  #menu p, #shipSelection p { margin: 10px 0; opacity: 0.9; font-size: 14px; }
   button {
-    padding: 14px 36px; font-size: 20px; margin-top: 20px;
+    padding: 14px 36px; font-size: 20px; margin: 10px;
     background: #00e5ff; color: #000; border: none; border-radius: 10px;
     cursor: pointer; font-weight: bold;
   }
   button:active { transform: scale(0.95); }
   #gameOverScreen h1 { color: #ff1744; }
+  #shipSelection button { width: 200px; }
 </style>
 </head>
 <body>
@@ -58,7 +59,17 @@
   <div id="menu">
     <h1>👾 Pendinha Boss Shooter</h1>
     <p>Toque ou mova o mouse para controlar<br>Segure para atirar</p>
-    <button id="startBtn">▶ Iniciar Jogo</button>
+    <button id="selectShipBtn">Escolher Nave</button>
+  </div>
+
+  <div id="shipSelection">
+    <h1>Escolha sua Nave</h1>
+    <button id="fighterBtn">Caça</button>
+    <p>Rápida, equilibrada, arma padrão</p>
+    <button id="mothershipBtn">Nave-Mãe</button>
+    <p>Lenta, resistente, arma pesada</p>
+    <button id="scoutBtn">Explorador</button>
+    <p>Muito rápida, frágil, arma precisa</p>
   </div>
 
   <div id="gameOverScreen">
@@ -73,28 +84,60 @@
 // ================ CONFIGURAÇÕES ================
 const CONFIG = {
   canvas: { width: 360, height: 520 },
-  player: { size: 16, speed: 0.18 },
-  weapons: {
-    basic: { name: "Básica", cooldown: 12, bullet: { vy: -7, r: 3, damage: 5 } },
-    double: { name: "Dupla", cooldown: 14, damage: 8 },
-    spread: { name: "Espalhada", cooldown: 16, damage: 7 },
-    rapid: { name: "Rápida", cooldown: 6, bullet: { vy: -10, r: 2, damage: 6 } },
-    laser: { name: "Laser", cooldown: 10, bullet: { vy: -14, r: 2, laser: true, damage: 12 } },
-    missile: { name: "Míssil", cooldown: 20, bullet: { vy: -5, r: 5, damage: 15, homing: true } }
+  ships: {
+    fighter: {
+      size: 16,
+      speed: 0.18,
+      maxLives: 3,
+      weapons: {
+        basic: { name: "Básica", cooldown: 12, bullet: { vy: -7, r: 3, damage: 5 } },
+        double: { name: "Dupla", cooldown: 14, damage: 8 },
+        spread: { name: "Espalhada", cooldown: 16, damage: 7 },
+        rapid: { name: "Rápida", cooldown: 6, bullet: { vy: -10, r: 2, damage: 6 } },
+        laser: { name: "Laser", cooldown: 10, bullet: { vy: -14, r: 2, laser: true, damage: 12 } },
+        missile: { name: "Míssil", cooldown: 20, bullet: { vy: -5, r: 5, damage: 15, homing: true } }
+      }
+    },
+    mothership: {
+      size: 20,
+      speed: 0.12,
+      maxLives: 4,
+      weapons: {
+        basic: { name: "Canhão Pesado", cooldown: 18, bullet: { vy: -6, r: 5, damage: 8 } },
+        double: { name: "Dupla", cooldown: 14, damage: 8 },
+        spread: { name: "Espalhada", cooldown: 16, damage: 7 },
+        rapid: { name: "Rápida", cooldown: 6, bullet: { vy: -10, r: 2, damage: 6 } },
+        laser: { name: "Laser", cooldown: 10, bullet: { vy: -14, r: 2, laser: true, damage: 12 } },
+        missile: { name: "Míssil", cooldown: 20, bullet: { vy: -5, r: 5, damage: 15, homing: true } }
+      }
+    },
+    scout: {
+      size: 12,
+      speed: 0.24,
+      maxLives: 2,
+      weapons: {
+        basic: { name: "Tiro Preciso", cooldown: 10, bullet: { vy: -9, r: 2, damage: 4 } },
+        double: { name: "Dupla", cooldown: 14, damage: 8 },
+        spread: { name: "Espalhada", cooldown: 16, damage: 7 },
+        rapid: { name: "Rápida", cooldown: 6, bullet: { vy: -10, r: 2, damage: 6 } },
+        laser: { name: "Laser", cooldown: 10, bullet: { vy: -14, r: 2, laser: true, damage: 12 } },
+        missile: { name: "Míssil", cooldown: 20, bullet: { vy: -5, r: 5, damage: 15, homing: true } }
+      }
+    }
   },
   powerUpDuration: 600,
-  allyDuration: 1200,
-  maxLives: 3
+  allyDuration: 1800, // 30 segundos a 60 FPS
 };
 
 // ================ ESTADO GLOBAL ================
 let gameState = 'menu';
 let score = 0;
 let phase = 1;
-let lives = CONFIG.maxLives;
+let lives = 3;
 let currentWeapon = 'basic';
 let weaponTimer = 0;
 let ally = null;
+let currentShip = 'fighter'; // Nave padrão inicial
 
 // ================ CANVAS E INPUT ================
 const canvas = document.getElementById('game');
@@ -124,27 +167,32 @@ const input = { x: canvas.width / 2, y: canvas.height - 80, active: false };
 // ================ ENTIDADES ================
 class Player {
   constructor() {
+    this.reset();
+  }
+  reset() {
     this.x = canvas.width / 2;
     this.y = canvas.height - 60;
     this.cooldown = 0;
     this.bullets = [];
+    this.shipType = currentShip;
+    this.size = CONFIG.ships[this.shipType].size;
+    this.speed = CONFIG.ships[this.shipType].speed;
   }
   update() {
-    this.x += (input.x - this.x) * CONFIG.player.speed;
-    this.y += (input.y - this.y) * CONFIG.player.speed;
-    this.x = Math.clamp(this.x, CONFIG.player.size, canvas.width - CONFIG.player.size);
-    this.y = Math.clamp(this.y, CONFIG.player.size, canvas.height - CONFIG.player.size);
+    this.x += (input.x - this.x) * this.speed;
+    this.y += (input.y - this.y) * this.speed;
+    this.x = Math.clamp(this.x, this.size, canvas.width - this.size);
+    this.y = Math.clamp(this.y, this.size, canvas.height - this.size);
 
     if (this.cooldown > 0) this.cooldown--;
     if (input.active && this.cooldown <= 0) {
       this.shoot();
-      this.cooldown = CONFIG.weapons[currentWeapon].cooldown || 12;
+      this.cooldown = CONFIG.ships[this.shipType].weapons[currentWeapon].cooldown || 12;
     }
 
     for (let i = this.bullets.length - 1; i >= 0; i--) {
       const b = this.bullets[i];
       if (b.homing) {
-        // Busca alvo mais próximo (boss > inimigos)
         let target = { x: boss.x, y: boss.y, dist: Math.hypot(b.x - boss.x, b.y - boss.y) };
         [...enemies, ...shooterEnemies].forEach(e => {
           const d = Math.hypot(b.x - e.x, b.y - e.y);
@@ -164,7 +212,7 @@ class Player {
     }
   }
   shoot() {
-    const w = CONFIG.weapons[currentWeapon];
+    const w = CONFIG.ships[this.shipType].weapons[currentWeapon];
     const baseDamage = w.damage || w.bullet?.damage || 5;
     if (currentWeapon === 'double') {
       this.bullets.push(
@@ -192,18 +240,41 @@ class Player {
     }
   }
   draw() {
-    ctx.fillStyle = '#00e5ff';
-    ctx.beginPath();
-    ctx.moveTo(this.x, this.y - 14);
-    ctx.lineTo(this.x - 12, this.y + 12);
-    ctx.lineTo(this.x + 12, this.y + 12);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(this.x, this.y + 2, 4, 0, Math.PI * 2);
-    ctx.fill();
+    if (this.shipType === 'mothership') {
+      ctx.fillStyle = '#0288d1';
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y - 18);
+      ctx.lineTo(this.x - 18, this.y + 12);
+      ctx.lineTo(this.x + 18, this.y + 12);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(this.x - 8, this.y - 10, 16, 4);
+    } else if (this.shipType === 'scout') {
+      ctx.fillStyle = '#ffeb3b';
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y - 10);
+      ctx.lineTo(this.x - 8, this.y + 10);
+      ctx.lineTo(this.x + 8, this.y + 10);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.arc(this.x, this.y - 2, 2, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.fillStyle = '#00e5ff';
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y - 14);
+      ctx.lineTo(this.x - 12, this.y + 12);
+      ctx.lineTo(this.x + 12, this.y + 12);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(this.x, this.y + 2, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 }
 
@@ -309,7 +380,7 @@ function triggerShake(amount = 8) {
 function spawnPowerUp(x, y) {
   const types = ['double', 'spread', 'rapid', 'laser', 'missile'];
   let type = types[Math.floor(Math.random() * types.length)];
-  if (Math.random() < 0.12 && lives < CONFIG.maxLives) type = 'life';
+  if (Math.random() < 0.12 && lives < CONFIG.ships[currentShip].maxLives) type = 'life';
   if (Math.random() < 0.10) type = 'ally';
   powerUps.push({ x, y, type, vy: 1.4, r: 14 });
 }
@@ -366,7 +437,7 @@ function update() {
   for (let i = powerUps.length - 1; i >= 0; i--) {
     const p = powerUps[i];
     p.y += p.vy;
-    if (Math.hypot(p.x - player.x, p.y - player.y) < CONFIG.player.size + p.r) {
+    if (Math.hypot(p.x - player.x, p.y - player.y) < player.size + p.r) {
       applyPowerUp(p.type);
       spawnParticles(p.x, p.y, '#00ff80', 35);
       powerUps.splice(i, 1);
@@ -387,7 +458,7 @@ function update() {
 
   if (weaponTimer > 0 && --weaponTimer === 0) {
     currentWeapon = 'basic';
-    document.getElementById('currentWeapon').textContent = 'Arma: Básica';
+    document.getElementById('currentWeapon').textContent = 'Arma: ' + CONFIG.ships[currentShip].weapons.basic.name;
   }
 
   if (ally) {
@@ -404,20 +475,19 @@ function update() {
 
 function applyPowerUp(type) {
   if (type === 'life') {
-    lives = Math.min(lives + 1, CONFIG.maxLives);
+    lives = Math.min(lives + 1, CONFIG.ships[currentShip].maxLives);
     updateLives();
   } else if (type === 'ally') {
     ally = { x: player.x - 60, y: player.y - 40, offset: -60, timer: CONFIG.allyDuration, shootTimer: 0 };
   } else {
     currentWeapon = type;
     weaponTimer = CONFIG.powerUpDuration;
-    document.getElementById('currentWeapon').textContent = 'Arma: ' + CONFIG.weapons[type].name;
+    document.getElementById('currentWeapon').textContent = 'Arma: ' + CONFIG.ships[currentShip].weapons[type].name;
   }
 }
 
 // ================ COLISÕES ================
 function checkCollisions() {
-  // Player bullets → boss
   for (let i = player.bullets.length - 1; i >= 0; i--) {
     const b = player.bullets[i];
     if (Math.hypot(b.x - boss.x, b.y - boss.y) < boss.radius + (b.r || 3)) {
@@ -438,7 +508,6 @@ function checkCollisions() {
     }
   }
 
-  // Player bullets → enemies & shooters
   const allEnemies = [...enemies, ...shooterEnemies];
   for (let ei = allEnemies.length - 1; ei >= 0; ei--) {
     const e = allEnemies[ei];
@@ -462,12 +531,11 @@ function checkCollisions() {
     }
   }
 
-  // Enemy bullets & enemies → player
   const threats = [...boss.bullets, ...enemies, ...shooterEnemies];
   for (let i = threats.length - 1; i >= 0; i--) {
     const obj = threats[i];
     const radius = obj.r || obj.size || 0;
-    if (radius > 0 && Math.hypot(obj.x - player.x, obj.y - player.y) < radius + CONFIG.player.size) {
+    if (radius > 0 && Math.hypot(obj.x - player.x, obj.y - player.y) < radius + player.size) {
       lives--;
       updateLives();
       triggerShake(14);
@@ -563,7 +631,6 @@ function render() {
       ctx.lineTo(ally.x + 10, ally.y + 10);
       ctx.closePath();
       ctx.fill();
-
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
       ctx.arc(ally.x, ally.y - 2, 3, 0, Math.PI * 2);
@@ -607,7 +674,7 @@ function loop() {
   requestAnimationFrame(loop);
 }
 
-// ================ UI ================
+// ================ UI E CONTROLES ================
 function updateUI() {
   document.getElementById('score').textContent = score;
   document.getElementById('phase').textContent = phase;
@@ -624,18 +691,20 @@ function gameOver() {
   document.getElementById('gameOverScreen').style.display = 'flex';
 }
 
+function showShipSelection() {
+  document.getElementById('menu').style.display = 'none';
+  document.getElementById('shipSelection').style.display = 'flex';
+}
+
 function startGame() {
   score = 0;
   phase = 1;
-  lives = CONFIG.maxLives;
+  lives = CONFIG.ships[currentShip].maxLives;
   currentWeapon = 'basic';
   weaponTimer = 0;
   ally = null;
 
-  player.x = canvas.width / 2;
-  player.y = canvas.height - 60;
-  player.bullets = [];
-
+  player.reset();
   boss.reset();
 
   particles.length = 0;
@@ -645,8 +714,9 @@ function startGame() {
 
   updateUI();
   updateLives();
-  document.getElementById('currentWeapon').textContent = 'Arma: Básica';
+  document.getElementById('currentWeapon').textContent = 'Arma: ' + CONFIG.ships[currentShip].weapons.basic.name;
   document.getElementById('menu').style.display = 'none';
+  document.getElementById('shipSelection').style.display = 'none';
   document.getElementById('gameOverScreen').style.display = 'none';
 
   gameState = 'playing';
@@ -659,10 +729,26 @@ document.getElementById('fullScreenBtn').onclick = () => {
   else document.exitFullscreen();
 };
 
+// Nave selection
+document.getElementById('selectShipBtn').onclick = showShipSelection;
+document.getElementById('fighterBtn').onclick = () => {
+  currentShip = 'fighter';
+  startGame();
+};
+document.getElementById('mothershipBtn').onclick = () => {
+  currentShip = 'mothership';
+  startGame();
+};
+document.getElementById('scoutBtn').onclick = () => {
+  currentShip = 'scout';
+  startGame();
+};
+
+// Utilitário
 Math.clamp = (n, min, max) => Math.max(min, Math.min(max, n));
 
-document.getElementById('startBtn').onclick = startGame;
-document.getElementById('restartBtn').onclick = startGame;
+// Inicialização
+document.getElementById('restartBtn').onclick = showShipSelection;
 
 updateUI();
 updateLives();
